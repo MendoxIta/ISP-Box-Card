@@ -1,0 +1,9 @@
+# Intégration Core sfr_box. Les taux DSL restent de la synchronisation.
+type: custom:isp-box-card
+provider: sfr
+auto_detect: true
+show_missing: false
+hide_public_ip: false
+# Si plusieurs box : choisir l'appareil dans l'éditeur.
+# device_id: identifiant_reel_du_registre
+# Les diagnostics désactivés et le reboot sans authentification ne sont pas inventés.

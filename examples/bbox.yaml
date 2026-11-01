@@ -1,0 +1,16 @@
+# PLACEHOLDERS : remplacer chaque sensor.a_remplacer_* par son entité réelle.
+# Intégration Core bbox historique (YAML), pas de détection par noms supposés.
+type: custom:isp-box-card
+provider: bouygues
+model: Bbox
+auto_detect: false
+show_missing: false
+show_controls: false
+entities:
+  download: sensor.a_remplacer_trafic_descendant
+  upload: sensor.a_remplacer_trafic_montant
+  download_limit: sensor.a_remplacer_bande_passante_descendante
+  upload_limit: sensor.a_remplacer_bande_passante_montante
+  uptime: sensor.a_remplacer_demarrage
+  reboots: sensor.a_remplacer_nombre_demarrages
+# Sans download_max/upload_max, la jauge utilise le capteur *_limit associé.

@@ -1,0 +1,26 @@
+# Configuration réelle récupérée de Home Assistant : lecture seule.
+# Les commandes détectées automatiquement sont masquées et bloquées par show_controls: false.
+type: custom:isp-box-card
+provider: free
+model: Freebox Ultra
+technology: Fibre FTTH
+hide_public_ip: false
+auto_detect: true
+show_missing: false
+show_controls: false
+image: /local/isp-box-card/freebox-ultra.png
+download_max: 8000
+upload_max: 8000
+entities:
+  download: sensor.freebox_v9_r1_vitesse_de_telechargement
+  upload: sensor.freebox_v9_r1_vitesse_d_envoi
+  public_ip: device_tracker.freebox_v9_r1
+  uptime: device_tracker.freebox_v9_r1
+attributes:
+  public_ip: IPv4
+  uptime: uptime
+# Aucun état Internet fiable, compteur total, RX/TX optique ou débit par port
+# n'est exposé par l'intégration actuelle : ces mesures ne sont pas inventées.
+# Ajouter votre visuel si disponible :
+# image: /local/freebox-ultra.webp
+# Les maximums de jauge doivent être ceux de votre liaison, en Mbit/s.

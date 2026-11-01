@@ -1,0 +1,11 @@
+# Intégration HACS Cyr-ius/hass-livebox-component, domaine livebox (audit 2.6.0).
+# Pas de choix arbitraire d'une interface comme trafic WAN.
+type: custom:isp-box-card
+provider: orange
+auto_detect: true
+show_missing: false
+hide_public_ip: false
+# Si plusieurs box : choisir l'appareil dans l'éditeur.
+# device_id: identifiant_reel_du_registre
+# Puissances, volumes cumulés, taux nommés par interface et diagnostics
+# apparaissent uniquement lorsqu'ils sont réellement exposés et activés.

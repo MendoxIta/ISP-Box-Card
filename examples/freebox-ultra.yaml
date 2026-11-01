@@ -1,0 +1,26 @@
+# Composition complète de référence, adaptée à une Freebox Ultra.
+# Le visuel doit être préparé puis copié séparément sur HA (voir README).
+type: custom:isp-box-card
+provider: free
+model: Freebox Ultra
+technology: Fibre FTTH
+hide_public_ip: false
+auto_detect: true
+show_missing: false
+show_controls: true
+image: /local/isp-box-card/freebox-ultra.png
+# Échelle théorique configurable du cadran, pas une mesure de synchronisation.
+download_max: 8000
+upload_max: 8000
+entities:
+  download: sensor.freebox_v9_r1_vitesse_de_telechargement
+  upload: sensor.freebox_v9_r1_vitesse_d_envoi
+  public_ip: device_tracker.freebox_v9_r1
+  uptime: device_tracker.freebox_v9_r1
+  wifi: switch.freebox_v9_r1_wi_fi
+  reboot: button.freebox_v9_r1_redemarrer
+attributes:
+  public_ip: IPv4
+  uptime: uptime
+# Températures, ventilation, appels et firmware sont détectés dans le registre.
+# Aucun faux port Ethernet, compteur de clients ou état WAN n’est ajouté.
