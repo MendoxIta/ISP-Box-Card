@@ -1,30 +1,95 @@
 # ISP Box Card
 
-Carte Lovelace sombre pour les box Internet françaises, distribuable comme Dashboard HACS. Projet indépendant, sans affiliation avec les opérateurs. **Version 0.2.0 : profils d’intégration et détection des données réelles.**
+Une carte pour les tableaux de bord **Home Assistant**, dédiée aux box Internet françaises : **Freebox, Livebox, SFR Box et Bbox**.
+
+Interface sombre, couleurs par opérateur et informations adaptées aux données de votre box. La carte utilise les entités déjà présentes dans Home Assistant : elle ne se connecte pas directement à votre compte opérateur.
+
+Projet indépendant, sans affiliation avec les opérateurs.
 
 <img width="844" height="1073" alt="image" src="https://github.com/user-attachments/assets/15ee4de3-f31b-4230-829f-65bf9eb469b4" />
 
-## Ce qui change selon l’opérateur
+## Compatibilité
 
-La carte conserve son identité visuelle mais adapte ses informations aux entités effectivement exposées. Elle ne se connecte jamais directement aux API des box et ne contient aucun identifiant opérateur.
+**Installez et configurez d’abord l’intégration de votre box dans Home Assistant.** Installer la carte seule ne crée pas les capteurs nécessaires.
 
-| Profil | Affichage adapté | Association |
+| Fournisseur | Intégration nécessaire | Association des entités |
 |---|---|---|
-| Free / `freebox` Core | Trafic courant, IPv4, fonctionnement, températures, ventilation, appels manqués, firmware ; Wi-Fi global et redémarrage | Registres appareil/entités HA, noms personnalisés acceptés |
-| Orange / `livebox` HACS Cyr-ius | État WAN, IPv4, optique selon modèle, fonctionnement, volumes cumulés, synchronisation DSL, trafic identifié par interface, clients suivis ; Wi-Fi principal/invité et redémarrage | Registres HA ; aucune interface choisie arbitrairement comme WAN |
-| SFR / `sfr_box` Core | État WAN et ligne DSL/FTTH, synchronisation DSL, diagnostics activés, VoIP, firmware ; redémarrage si exposé | Registres HA ; pas de faux contrôle Wi-Fi |
-| Bouygues / `bbox` Core historique | Trafic courant, bande passante disponible, démarrage timestamp, nombre de démarrages | **Manuelle** : pas de contrat de registre/unique_id fiable pour ces anciens capteurs |
+| Free | Freebox, intégration officielle HA (`freebox`) | Automatique, ou manuelle |
+| Orange / Sosh | [Livebox HACS de Cyr-ius](https://github.com/cyr-ius/hass-livebox-component) (`livebox`) | Automatique, ou manuelle |
+| SFR / RED | SFR Box, intégration officielle HA (`sfr_box`) | Automatique, ou manuelle |
+| Bouygues | Bbox, intégration officielle historique (`bbox`) | Manuelle |
 
-Inventaire exact, versions auditées, unités, réserves matérielles et sources : **[docs/INTEGRATIONS.md](docs/INTEGRATIONS.md)**. Sosh/RED utilisent ici le profil de leur matériel et de son intégration, pas une garantie commerciale universelle.
+Les données dépendent du modèle, du firmware et des entités activées : débits courants, IP, durée de fonctionnement, températures, ventilation, état de ligne, optique, Wi-Fi ou redémarrage.
 
-**Synchronisation, trafic courant et volumes cumulés ne sont pas interchangeables.** Les taux d’interface Livebox restent nommés par interface ; les volumes en B/MB/GB ne deviennent jamais des Mbit/s. Les températures CPU Freebox ne sont pas un taux de charge CPU. Un tracker `home` n’établit pas la connexion WAN.
+**Toutes les box ne proposent pas les mêmes informations ni les mêmes commandes.** La synchronisation DSL est distinguée du trafic courant, et les volumes cumulés ne sont pas affichés comme des débits.
 
-## Installation et mise à jour
+La carte a été vérifiée sur **Freebox Ultra**. Les autres profils reposent sur l’audit des intégrations et des tests synthétiques ; les retours sur matériel réel sont bienvenus. Sosh et RED utilisent le profil de leur intégration et de leur matériel, sans garantie de compatibilité avec tous les modèles.
 
-1. Copier `dist/isp-box-card.js` dans `/config/www/isp-box-card.js` sur HA. Conserver l’image et les autres fichiers déjà présents.
-2. Déclarer ou mettre à jour **une seule** ressource Dashboard de type Module JavaScript : `/local/isp-box-card.js?v=0.2.0`. Ne pas ajouter une seconde ressource si l’ancienne existe.
-3. Recharger complètement le navigateur. Le module embarque ses profils : aucun autre JS, npm ou accès CDN n’est nécessaire dans HA.
-4. Ajouter **ISP Box Card**, choisir le fournisseur, puis l’appareil box. Si une seule box correspond, ou si les entités explicites désignent un seul appareil, la sélection est automatique.
+Détails : [capacités et limites par intégration](docs/INTEGRATIONS.md).
+
+## Installation
+
+Choisissez **une seule** méthode : HACS ou installation manuelle. Il n’est pas nécessaire d’installer Node.js, npm ou les fichiers sources pour utiliser la carte.
+
+### Méthode 1 — HACS, recommandée
+
+[HACS](https://www.hacs.xyz/) doit déjà être installé dans Home Assistant.
+
+1. Ouvrez **HACS** puis le menu **⋮ → Dépôts personnalisés**.
+2. Ajoutez le dépôt :
+
+   ```text
+   https://github.com/MendoxIta/ISP-Box-Card
+   ```
+
+3. Choisissez le type **Dashboard** et ajoutez le dépôt.
+4. Recherchez **ISP Box Card**, puis téléchargez la version souhaitée.
+5. Vérifiez la ressource ajoutée dans **Paramètres → Tableaux de bord → ⋮ → Ressources**. Si ce menu n’apparaît pas, activez le **mode avancé** dans votre profil utilisateur.
+
+   | Paramètre | Valeur |
+   |---|---|
+   | URL | `/hacsfiles/ISP-Box-Card/isp-box-card.js` |
+   | Type | Module JavaScript |
+
+   HACS peut ajouter un paramètre `?hacstag=…` : conservez l’URL qu’il génère. Si la ressource existe déjà, n’en ajoutez pas une seconde ; sinon, créez-la avec l’URL ci-dessus.
+
+6. Rechargez complètement le navigateur, puis ajoutez la carte à un tableau de bord.
+
+**Vous migrez depuis une installation manuelle ?** Retirez l’ancienne entrée de ressource `/local/isp-box-card.js?...` pour ne pas charger les deux versions en parallèle. Conservez vos configurations de carte et vos images locales.
+
+### Méthode 2 — Installation manuelle
+
+1. Téléchargez **`isp-box-card.js`** depuis les fichiers joints d’une [release](https://github.com/MendoxIta/ISP-Box-Card/releases). Si le fichier n’est pas joint, ouvrez [dist/isp-box-card.js](https://github.com/MendoxIta/ISP-Box-Card/blob/main/dist/isp-box-card.js) et utilisez **Download raw file**.
+2. Copiez ce fichier sur Home Assistant :
+
+   ```text
+   /config/www/isp-box-card.js
+   ```
+
+   Créez le dossier `www` s’il n’existe pas. Le fichier JavaScript suffit : ne copiez pas le projet complet.
+
+3. Dans **Paramètres → Tableaux de bord → ⋮ → Ressources**, ajoutez une ressource :
+
+   | Paramètre | Valeur |
+   |---|---|
+   | URL | `/local/isp-box-card.js?v=0.2.0` |
+   | Type | Module JavaScript |
+
+   Activez le **mode avancé** de votre profil si le menu Ressources n’est pas visible.
+
+4. Si vous venez de créer le dossier `www` pour la première fois et que `/local/` n’est pas accessible, redémarrez Home Assistant. Sinon, un rechargement complet du navigateur suffit généralement.
+5. Ajoutez la carte à un tableau de bord.
+
+## Ajouter et configurer la carte
+
+1. Ouvrez votre tableau de bord et passez en mode **Modifier**.
+2. Cliquez sur **Ajouter une carte**, puis recherchez **ISP Box Card**.
+3. Choisissez votre fournisseur et, si nécessaire, l’appareil correspondant à votre box.
+4. Vérifiez les entités associées et enregistrez.
+
+Pour Freebox, Livebox et SFR, les entités compatibles peuvent être associées automatiquement. Si plusieurs box sont présentes, sélectionnez explicitement la bonne. Pour Bbox, renseignez les capteurs manuellement.
+
+Vous pouvez aussi utiliser une carte manuelle en YAML :
 
 ```yaml
 type: custom:isp-box-card
@@ -32,105 +97,79 @@ provider: free
 model: Freebox Ultra
 auto_detect: true
 show_missing: false
-hide_public_ip: false
-# Facultatif : à choisir dans l’éditeur si plusieurs box sont présentes.
-# device_id: identifiant_du_registre_ha
+hide_public_ip: true
 ```
 
-Exemples : `examples/freebox-ultra.yaml`, `freebox-ultra-readonly.yaml`, `livebox.yaml`, `sfr-box.yaml`, `bbox.yaml`. Les identifiants Bbox d’exemple sont des placeholders à remplacer, pas des entités annoncées comme découvertes.
-
-### Détection fiable et limites
-
-- La détection lit `config/entity_registry/list` et `config/device_registry/list` via la connexion HA authentifiée. Aucune commande de box n’est exécutée pendant cette lecture.
-- Les associations utilisent la plateforme, l’appareil, la clé de traduction et/ou le `unique_id` du composant. **Aucun nom `entity_id` n’est deviné** ; les entités renommées restent reconnues.
-- Plusieurs appareils ne sont jamais fusionnés automatiquement. Choisir `device_id` si la sélection est ambiguë.
-- Les entités désactivées ne sont ni activées ni affichées comme de faux capteurs. Les événements de modification des registres actualisent les associations automatiques, y compris après un renommage. Si leur abonnement est refusé, recharger la page ; une modification de configuration retente aussi une lecture initialement échouée. Les associations explicitement saisies restent littérales et doivent être corrigées manuellement après renommage.
-- `auto_detect: false` permet une configuration entièrement explicite. Si la lecture du registre est refusée, les associations explicites restent utilisables.
-- `entities`, `attributes` et les diagnostics YAML explicites restent prioritaires. Changer d’opérateur dans l’éditeur réinitialise les associations, le modèle, l’image et les plafonds de l’ancien opérateur pour éviter un mélange.
-- Sans capteur fiable de connexion, le bandeau indique le profil d’intégration plutôt qu’un faux statut « Connectée ».
-
-## Affichage et données complémentaires
-
-- `hide_public_ip: false` affiche directement l’IPv4 ; le clic permet encore de la masquer. Il s’agit d’une protection visuelle, pas d’une permission HA. Les captures connectées ne sont pas destinées à une publication automatique.
-- `show_missing: false` est recommandé : seuls les blocs associés apparaissent. `true` n’affiche des emplacements vides que pour les capacités nominales du profil ; il ne réintroduit plus les blocs incompatibles d’un autre opérateur.
-- `show_controls: false` retire les commandes et bloque leur exécution depuis le composant. Les droits HA restent la véritable frontière d’autorisation.
-- `download_max` / `upload_max`, nombres positifs en Mbit/s, règlent l’échelle des jauges, pas un débit mesuré ou garanti. Sans maximum explicite, un capteur Bbox `download_limit` / `upload_limit` associé peut fournir cette échelle. Le trafic réel remplit l’arc ; sans maximum configuré, la mesure reste lisible sans progression arbitraire.
-- La durée depuis un démarrage timestamp utilise le fuseau de HA, pas celui du navigateur. Sans fuseau exploitable, une date explicite est conservée.
-- Un bloc « Informations de la box » rassemble les diagnostics effectivement détectés et le firmware disponible. L’historique nominatif des appels, les listes de baux et les numéros de série ne sont pas affichés automatiquement.
-
-### Associations explicites disponibles
-
-| Clé dans `entities` | Sémantique |
+| Fournisseur | Valeur de `provider` |
 |---|---|
-| `connection` | État WAN fiable : `on/off`, `up/down`, `connected/disconnected`, `online/offline` |
-| `download`, `upload` | Trafic courant, jamais synchronisation de ligne |
-| `sync_download`, `sync_upload` | Synchronisation DSL, affichée distinctement dans les informations |
-| `download_limit`, `upload_limit` | Bande passante disponible, notamment Bbox, pas une synchronisation DSL supposée |
-| `public_ip`, `uptime` | IPv4 et durée/date de démarrage |
-| `optical_rx`, `optical_tx` | Puissances optiques, en général dBm |
-| `devices` | Total uniquement si une source exhaustive existe |
-| `ethernet_devices`, `wifi_devices` | Compteurs suivis ; sur Livebox, dépendent des options de tracking |
-| `missed_calls`, `reboots` | Appels manqués non lus et compteur de démarrages |
-| `wifi`, `guest_wifi` | `switch.*` uniquement |
-| `reboot` | `button.*` uniquement |
+| Free | `free` |
+| Orange / Sosh | `orange` |
+| SFR / RED | `sfr` |
+| Bouygues | `bouygues` |
 
-Unités reconnues pour les taux : `bit/s`, `b/s`, `kbit/s`, `kbps`, `Mbit/s`, `Mbps`, `Gbit/s`, `Gbps`, `B/s`, `kB/s`, `KB/s`, `MB/s`, `GB/s`. La casse B/b est respectée et l’unité HA affichée est utilisée : pas de double conversion d’unité suggérée.
+### Options utiles
 
-Les attributs nommés sont possibles pour `public_ip`, `uptime`, `ethernet_devices` et `wifi_devices`. La détection Freebox utilise `IPv4`/`uptime` du tracker routeur ; Livebox utilise notamment `wan_ipaddress`, `wired clients`, `wireless clients` de son capteur WAN.
+| Option | Effet |
+|---|---|
+| `model` | Personnalise le nom du modèle affiché |
+| `hide_public_ip: true` | Masque l’IP à l’affichage ; un clic permet de la révéler |
+| `hide_public_ip: false` | Affiche directement l’IP |
+| `show_missing: false` | Masque les blocs sans source associée |
+| `show_controls: false` | Masque et bloque les commandes depuis la carte |
+| `download_max`, `upload_max` | Règlent l’échelle des jauges, en Mbit/s |
+| `image` | Ajoute une image locale de votre box |
 
-Diagnostics manuels supplémentaires, en lecture seule :
+Les commandes disponibles dépendent de l’intégration. La carte demande confirmation avant un redémarrage ou une désactivation du Wi-Fi. Masquer une commande ou une IP ne remplace pas les permissions Home Assistant.
+
+Exemples : [Freebox Ultra](examples/freebox-ultra.yaml) · [Freebox sans commandes](examples/freebox-ultra-readonly.yaml) · [Livebox](examples/livebox.yaml) · [SFR Box](examples/sfr-box.yaml) · [Bbox](examples/bbox.yaml).
+
+Les identifiants fictifs présents dans les exemples doivent être remplacés par vos propres entités. Pour les associations manuelles, attributs et diagnostics supplémentaires : [configuration avancée](docs/CONFIGURATION.md).
+
+### Ajouter une image de la box, facultatif
+
+Copiez une image que vous êtes autorisé à utiliser dans :
+
+```text
+/config/www/isp-box-card/ma-box.png
+```
+
+Puis ajoutez à la configuration :
 
 ```yaml
-diagnostics:
-  - entity: sensor.mon_capteur_temperature
-    name: Température du module
-  - entity: sensor.mon_capteur_duree
-    name: Durée de connexion
-    kind: duration
-  - entity: binary_sensor.mon_etat_ligne
-    name: Liaison
+image: /local/isp-box-card/ma-box.png
 ```
 
-Formats : `text` (défaut, unité native conservée), `rate` (conversion Mbit/s), `duration` (unités `s/min/h/d`), `binary`. Une propriété `attribute` et éventuellement `unit` permettent une extraction explicite sans fabriquer de capteur backend.
+Les images opérateur ne sont pas fournies avec la carte. Elles restent indépendantes de l’installation et des mises à jour HACS. Seuls les chemins locaux absolus sont acceptés.
 
-Débits Ethernet par port : uniquement si une autre source réelle existe, via `ports: [{name: Port 1, download: sensor.mon_rx, upload: sensor.mon_tx}]`. Aucun profil audité ne promet ces compteurs et les anciens ports sans entités sont masqués.
+## Mise à jour
 
-## Visuel local
+- **HACS** : installez la mise à jour proposée, puis rechargez complètement le navigateur. Conservez la ressource gérée par HACS.
+- **Manuelle** : remplacez `/config/www/isp-box-card.js`, puis modifiez le paramètre de version dans la ressource existante, par exemple `?v=0.2.0` vers le numéro de la version installée. N’ajoutez pas une deuxième ressource.
 
-```yaml
-image: /local/isp-box-card/freebox-ultra.png
-```
+Conservez vos images et la configuration de vos cartes. Consultez le [journal des versions](CHANGELOG.md) avant une mise à jour.
 
-Utiliser une photo personnelle ou un visuel dont l’usage est autorisé, copié dans `/config/www/`. Seuls les chemins locaux absolus sont acceptés. Aucune image opérateur n’est incorporée dans le module ni dans l’archive de code public.
+## Dépannage
 
-Préparation facultative du visuel Freebox pour usage local : `npm ci`, puis `node scripts/prepare-freebox-image.mjs` (Chromium système ou Playwright requis). Copier le PNG obtenu vers le chemin HA ci-dessus. Le script recadre uniquement les marges transparentes ; le visuel de Free ne devient pas un contenu sous licence MIT.
+### « Custom element doesn't exist: isp-box-card »
 
-## GitHub et HACS
+Vérifiez que le fichier JavaScript est accessible à l’URL de la ressource, que son type est **Module JavaScript** et que la ressource n’est déclarée qu’une seule fois. Rechargez ensuite complètement le navigateur ou videz son cache.
 
-Le dépôt doit être nommé **`isp-box-card`**. Versionner les sources, `dist/isp-box-card.js`, `hacs.json`, les exemples et les tests. Le fichier distribué est autonome : le dossier `src/` n’est pas chargé par HA.
+### La carte n’affiche pas certaines données
 
-Ajouter le dépôt comme dépôt personnalisé HACS, catégorie Dashboard, puis vérifier la ressource `/hacsfiles/isp-box-card/isp-box-card.js`. Ne pas charger en même temps cette ressource et une version `/local/`. L’ajout au catalogue HACS par défaut est une démarche distincte. Aucun dépôt ni release n’a été publié automatiquement.
+Vérifiez d’abord que l’intégration de la box fonctionne et que les entités attendues sont activées et disponibles dans Home Assistant. Certaines données ou commandes ne sont pas exposées par tous les modèles.
 
-## Développement et vérification
+Si nécessaire, sélectionnez à nouveau le bon appareil, rechargez la page ou associez les entités manuellement. Les diagnostics désactivés ne sont pas activés automatiquement par la carte.
 
-```sh
-npm ci
-npm run build
-npm test
-npx playwright install chromium
-npm run test:browser
-# Archive publique vérifiée, sans données connectées ni artwork :
-python3 scripts/package-release.py
-python3 -m http.server 8129 --bind 127.0.0.1
-```
+### L’image ne s’affiche pas
 
-- `/demo/providers.html` : exemples **synthétiques** distincts des quatre intégrations, avec le même mécanisme de registre que la carte.
-- `/demo/index.html` : banc de régression des associations manuelles, pas une promesse de capacités de chaque box.
-- Tests : profils renommés, multi-box, sources désactivées, synchronisation séparée du trafic, volumes conservés, état `problem`, permissions refusées et responsive.
-- Freebox Ultra : nouveaux diagnostics et éditeur natif vérifiés avec les véritables états et registres de HA 2026.10.4, sans appels de services.
-- Autres fournisseurs : audit de code et tests synthétiques uniquement, **pas de validation matérielle**. Les versions amont et modèles peuvent modifier les capacités.
-- Non vérifié : exécution réelle Wi-Fi/redémarrage, installation via HACS/GitHub et Safari iPhone.
+Vérifiez le chemin et la casse du nom du fichier. Un fichier placé dans `/config/www/isp-box-card/ma-box.png` doit être accessible via `/local/isp-box-card/ma-box.png` depuis votre navigateur connecté à Home Assistant.
 
-Pour rejouer l’essai connecté, définir `HASS_URL`/`HASS_TOKEN` dans l’environnement ou un `.env` exclu de Git (`HASS_ENV_FILE` pour un fichier externe), puis `node scripts/test-provider-home-assistant.mjs`. Cet essai suppose l’onglet `/dashboard-family-test/internet` et son ancien module déjà déclarés : la nouvelle version est fournie **uniquement à cette session de navigateur**. Il ne modifie ni le fichier `www` distant, ni les dashboards, ni les ressources. Le rapport précise cette limite ; les captures sont dans `artifacts/provider-adaptation/`, exclues du dépôt.
+## Signaler un problème
 
-Licence MIT pour le code. Noms commerciaux et visuels restent la propriété de leurs détenteurs.
+Ouvrez une [issue GitHub](https://github.com/MendoxIta/ISP-Box-Card/issues) avec le modèle de box, le nom et la version de l’intégration, les versions de Home Assistant et de la carte, ainsi qu’une description du problème.
+
+Si vous partagez une configuration ou une capture, retirez vos tokens, mots de passe et données personnelles ; masquez notamment votre IP publique si vous ne souhaitez pas la publier.
+
+## Licence
+
+Code sous [licence MIT](LICENSE). Les marques et visuels restent la propriété de leurs détenteurs.
