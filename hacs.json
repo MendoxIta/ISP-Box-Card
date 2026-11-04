@@ -1,5 +1,6 @@
 {
   "name": "ISP Box Card",
   "filename": "isp-box-card.js",
+  "country": "fr",
   "render_readme": true
 }
