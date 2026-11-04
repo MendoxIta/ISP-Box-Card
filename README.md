@@ -2,6 +2,8 @@
 
 Carte Lovelace sombre pour les box Internet françaises, distribuable comme Dashboard HACS. Projet indépendant, sans affiliation avec les opérateurs. **Version 0.2.0 : profils d’intégration et détection des données réelles.**
 
+<img width="844" height="1073" alt="image" src="https://github.com/user-attachments/assets/15ee4de3-f31b-4230-829f-65bf9eb469b4" />
+
 ## Ce qui change selon l’opérateur
 
 La carte conserve son identité visuelle mais adapte ses informations aux entités effectivement exposées. Elle ne se connecte jamais directement aux API des box et ne contient aucun identifiant opérateur.
