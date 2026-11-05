@@ -72,7 +72,7 @@ Choisissez **une seule** méthode : HACS ou installation manuelle. Il n’est pa
 
    | Paramètre | Valeur |
    |---|---|
-   | URL | `/local/isp-box-card.js?v=0.2.0` |
+   | URL | `/local/isp-box-card.js?v=0.3.0` |
    | Type | Module JavaScript |
 
    Activez le **mode avancé** de votre profil si le menu Ressources n’est pas visible.
@@ -141,10 +141,41 @@ image: /local/isp-box-card/ma-box.png
 
 Les images opérateur ne sont pas fournies avec la carte. Elles restent indépendantes de l’installation et des mises à jour HACS. Seuls les chemins locaux absolus sont acceptés.
 
+## Personnaliser le format et les couleurs
+
+Dans l’éditeur visuel, choisissez le **Format**, puis ouvrez **Apparence** : arrondi, espacement, marge intérieure et sélecteurs de couleurs. Le bouton **Réinitialiser l’apparence** restaure le rendu par défaut sans modifier vos entités ni vos options réseau.
+
+- **Complet** (`full`, défaut) : présentation illustrée habituelle.
+- **Compact** (`compact`) : en-tête sans grande illustration et blocs plus denses, avec les mêmes mesures, diagnostics et commandes.
+
+Exemple YAML :
+
+```yaml
+type: custom:isp-box-card
+provider: free
+layout: compact
+show_missing: false
+appearance:
+  radius: 12
+  gap: 10
+  padding: 12
+  colors:
+    accent: "#7c3aed"
+    background: "#f8fafc"
+    surface: "#ffffff"
+    text: "#172033"
+    muted: "#475569"
+    border: "#cbd5e1"
+    download: "#0369a1"
+    upload: "#15803d"
+```
+
+Les couleurs non renseignées conservent leur valeur par défaut ; sans accent personnalisé, la couleur suit l’opérateur. Les espacements sont adaptés aux petits écrans. Choisissez des couleurs suffisamment contrastées pour préserver la lisibilité. [Toutes les options d’apparence](docs/CONFIGURATION.md#apparence).
+
 ## Mise à jour
 
 - **HACS** : installez la mise à jour proposée, puis rechargez complètement le navigateur. Conservez la ressource gérée par HACS.
-- **Manuelle** : remplacez `/config/www/isp-box-card.js`, puis modifiez le paramètre de version dans la ressource existante, par exemple `?v=0.2.0` vers le numéro de la version installée. N’ajoutez pas une deuxième ressource.
+- **Manuelle** : remplacez `/config/www/isp-box-card.js`, puis modifiez le paramètre de version dans la ressource existante, par exemple `?v=0.3.0` vers le numéro de la version installée. N’ajoutez pas une deuxième ressource.
 
 Conservez vos images et la configuration de vos cartes. Consultez le [journal des versions](CHANGELOG.md) avant une mise à jour.
 
