@@ -1,12 +1,12 @@
 {
   "name": "isp-box-card",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "type": "module",
   "scripts": {
     "build": "node scripts/build.mjs",
     "test": "node --test tests/*.test.mjs",
-    "test:browser": "node tests/browser.mjs && node tests/provider-browser.mjs && node tests/appearance-browser.mjs"
+    "test:browser": "node tests/browser.mjs && node tests/provider-browser.mjs && node tests/appearance-browser.mjs && node tests/editor-browser.mjs"
   },
   "devDependencies": {
     "playwright": "1.64.1"

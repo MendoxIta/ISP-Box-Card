@@ -1,6 +1,6 @@
 /* ISP Box Card — MIT. Uses only authenticated HA registry/state data. */
 import { INTEGRATION_PROFILES, EXTRA_METRICS, resolveProviderConfig } from './provider-profiles.js';
-export const VERSION = '0.3.0';
+export const VERSION = '0.3.1';
 export const PROVIDERS = {
   free: { name: 'Free', color: '#ed3346', model: 'Freebox' },
   orange: { name: 'Orange', color: '#ff7900', model: 'Livebox' },
@@ -381,53 +381,101 @@ export class IspBoxCard extends HTMLElement {
 class IspBoxCardEditor extends HTMLElement {
   constructor() { super(); this.attachShadow({ mode: 'open' }); }
   setConfig(config) { this.config = structuredClone(config); this.render(); }
-  set hass(hass) { this._hass = hass; const form = this.shadowRoot.querySelector('ha-form'); if (form) form.hass = hass; }
-  render() {
-    if (!this.config) return;
-    this.shadowRoot.innerHTML = `<ha-form></ha-form><button type="button" id="reset-appearance">Réinitialiser l’apparence</button><p>ISP Box Card ${VERSION} · Diagnostics additionnels et ports Ethernet : configuration YAML (voir README).</p>`;
-    const form = this.shadowRoot.querySelector('ha-form');
-    form.hass = this._hass;
-    form.data = {auto_detect:true,show_controls:true,show_missing:false,hide_public_ip:true,layout:'full',...this.config,appearance:{...this.config.appearance,colors:Object.fromEntries(Object.entries(this.config.appearance?.colors||{}).map(([key,value])=>[key,hexToRgb(value)]))}};
-    form.schema = [
-      { name: 'provider', selector: { select: { options: Object.entries(PROVIDERS).map(([value, p]) => ({ value, label: p.name })) } } },
-      ...(INTEGRATION_PROFILES[this.config.provider||'free'].automatic ? [{name:'device_id',selector:{device:{integration:INTEGRATION_PROFILES[this.config.provider||'free'].domain}}}] : []),
-      {name:'layout',selector:{select:{options:[{value:'full',label:'Complète'},{value:'compact',label:'Compacte'}]}}},
-      {name:'appearance',type:'expandable',title:'Apparence',schema:[
-        ...Object.entries(APPEARANCE_RANGES).map(([name,max])=>({name,selector:{number:{min:0,max,step:1,mode:'box',unit_of_measurement:'px'}}})),
-        {name:'colors',type:'expandable',title:'Couleurs personnalisées',schema:Object.keys(COLOR_ROLES).map(name=>({name,selector:{color_rgb:{}}}))},
-      ]},
-      ...['title', 'model', 'technology', 'image'].map(name => ({ name, selector: { text: {} } })),
-      ...[...(INTEGRATION_PROFILES[this.config.provider||'free'].automatic ? ['auto_detect'] : []), 'hide_public_ip', 'show_missing', 'show_controls'].map(name => ({name,selector:{boolean:{}}})),
-      ...['download_max', 'upload_max'].map(name => ({ name, selector: { number: { min: 1, mode: 'box', unit_of_measurement: 'Mbit/s' } } })),
-      { name: 'attributes', type: 'expandable', title: 'Attributs optionnels (IP et démarrage)', schema: ['public_ip', 'uptime', 'ethernet_devices', 'wifi_devices'].filter(name=>INTEGRATION_PROFILES[this.config.provider||'free'].fields.includes(name)||this.config.attributes?.[name]).map(name => ({ name, selector: { text: {} } })) },
-      { name: 'entities', type: 'expandable', title: 'Entités Home Assistant', schema: [...new Set([...INTEGRATION_PROFILES[this.config.provider||'free'].fields,...Object.keys(this.config.entities||{})])].map(name => ({ name, selector: { entity: ['wifi', 'guest_wifi'].includes(name) ? { domain: 'switch' } : name === 'reboot' ? { domain: 'button' } : {} } })) },
-    ];
-    const labels = { layout:'Format', radius:'Arrondi des angles', gap:'Espacement entre blocs', padding:'Marge intérieure', ...COLOR_ROLES, auto_detect:'Détecter les données de l’intégration', device_id:'Appareil box (requis si plusieurs)', provider: 'Opérateur', title: 'Titre personnalisé', model: 'Modèle de box', technology: 'Technologie (ex. Fibre XGS-PON)', image: 'Visuel local (ex. /local/freebox-ultra.webp)', show_missing: 'Afficher aussi les blocs non renseignés de la référence', show_controls: 'Afficher les commandes réseau', hide_public_ip: 'Masquer l’IP publique par défaut', download_max: 'Maximum descendant', upload_max: 'Maximum montant', entities: 'Entités', ...LABELS };
-    form.computeLabel = field => labels[field.name] || field.name;
+  set hass(hass) { this._hass = hass; for(const form of this._forms||[])form.hass=hass; }
+  _mount() {
+    // HA echoes every config-changed through setConfig: never replace mounted controls.
+    this.shadowRoot.innerHTML = `<style>
+      :host{display:block;color:var(--primary-text-color);font-family:var(--paper-font-body1_-_font-family,inherit)}
+      .intro,.hint,.footer{color:var(--secondary-text-color);font-size:12px;line-height:1.5}
+      .intro{margin:0 0 14px}.footer{margin:14px 4px 0}
+      details{border:1px solid var(--divider-color,#ddd);border-radius:12px;margin:0 0 12px;background:var(--card-background-color)}
+      summary{cursor:pointer;display:flex;align-items:center;gap:12px;padding:16px;list-style:none;font-weight:600;min-height:48px}
+      summary::-webkit-details-marker{display:none}summary ha-icon{color:var(--primary-color);flex-shrink:0}
+      summary:after{content:'›';margin-left:auto;font-size:24px;color:var(--secondary-text-color)}details[open]>summary:after{transform:rotate(90deg)}
+      summary:focus-visible,.reset:focus-visible{outline:2px solid var(--primary-color);outline-offset:2px}
+      .body{padding:0 16px 16px}.hint{margin:0 0 16px}
+      .reset{font:inherit;border:1px solid var(--divider-color,#ddd);border-radius:8px;min-height:44px;padding:10px 14px;background:transparent;color:var(--primary-color);cursor:pointer;margin-top:16px}
+    </style><p class="intro">Choisissez votre box, puis adaptez l’affichage. Les associations de capteurs restent dans les réglages avancés.</p>
+    <details data-section="box" open><summary><ha-icon icon="mdi:router-wireless"></ha-icon>Box et connexion</summary><div class="body"><p class="hint">Sélectionnez l’opérateur et l’appareil. La détection automatique est recommandée lorsqu’elle est disponible.</p><ha-form id="box-form"></ha-form></div></details>
+    <details data-section="display"><summary><ha-icon icon="mdi:view-dashboard-outline"></ha-icon>Affichage et confidentialité</summary><div class="body"><p class="hint">Titre, visuel et informations affichées. Le masquage des commandes ne remplace pas les permissions Home Assistant.</p><ha-form id="display-form"></ha-form></div></details>
+    <details data-section="appearance"><summary><ha-icon icon="mdi:palette-outline"></ha-icon>Apparence et format</summary><div class="body"><p class="hint">Les valeurs laissées vides suivent le style par défaut. Une couleur personnalisée reste la même si vous changez d’opérateur.</p><ha-form id="appearance-form"></ha-form><button type="button" class="reset" id="reset-appearance">Réinitialiser l’apparence</button></div></details>
+    <details data-section="advanced"><summary><ha-icon icon="mdi:tune"></ha-icon>Données avancées</summary><div class="body"><p class="hint">Facultatif : corrigez les associations automatiques, renseignez les capteurs Bbox ou réglez l’échelle des jauges.</p><ha-form id="advanced-form"></ha-form></div></details>
+    <p class="footer">ISP Box Card ${VERSION} · Diagnostics supplémentaires et ports Ethernet : configuration YAML.</p>`;
+    const labels = { layout:'Format', radius:'Arrondi des angles', gap:'Espacement', padding:'Marge intérieure', ...COLOR_ROLES, auto_detect:'Détecter automatiquement les entités', device_id:'Appareil box', provider:'Opérateur', title:'Titre personnalisé', model:'Modèle de box', technology:'Technologie (ex. Fibre XGS-PON)', image:'Image locale (facultatif)', show_missing:'Afficher les blocs sans données', show_controls:'Afficher les commandes réseau', hide_public_ip:'Masquer l’IP publique par défaut', download_max:'Échelle descendante', upload_max:'Échelle montante', entities:'Entités', ...LABELS };
+    const helpers = {device_id:'À sélectionner si plusieurs box sont présentes.', image:'Exemple : /local/isp-box-card/ma-box.png', layout:'Compact conserve les données et commandes, sans la grande illustration.', show_missing:'Les sources absentes restent indiquées comme non associées.', download_max:'Échelle d’affichage en Mbit/s, pas un débit mesuré.', upload_max:'Échelle d’affichage en Mbit/s, pas un débit mesuré.'};
+    this._forms=[...this.shadowRoot.querySelectorAll('ha-form')];
+    for(const form of this._forms){
+      form.computeLabel=field=>labels[field.name]||field.name;
+      form.computeHelper=field=>helpers[field.name];
+      form.addEventListener('value-changed',event=>this._valueChanged(event));
+    }
     this.shadowRoot.querySelector('#reset-appearance').addEventListener('click',()=>{
       const next={...this.config};delete next.appearance;delete next.layout;this.config=next;this.render();
       this.shadowRoot.querySelector('#reset-appearance').focus();
       this.dispatchEvent(new CustomEvent('config-changed',{detail:{config:next},bubbles:true,composed:true}));
     });
-    form.addEventListener('value-changed', event => {
-      event.stopPropagation();
-      const next = { ...this.config, ...event.detail.value };
-      const changedProvider=next.provider!==this.config.provider;
-      if(changedProvider){next.entities={};next.attributes={};next.diagnostics=[];next.ports=[];next.model=PROVIDERS[next.provider].model;delete next.device_id;delete next.image;delete next.technology;delete next.download_max;delete next.upload_max;}
-      next.entities = Object.fromEntries(Object.entries(next.entities || {}).filter(([, value]) => value));
-      if (next.attributes) next.attributes = Object.fromEntries(Object.entries(next.attributes).filter(([, value]) => value));
-      for (const key of ['download_max', 'upload_max']) if (next[key] === '' || next[key] == null) delete next[key];
-      if(next.appearance){
-        const a={...next.appearance};
-        for(const key of Object.keys(APPEARANCE_RANGES))if(a[key]===''||a[key]==null)delete a[key];
-        a.colors=Object.fromEntries(Object.entries(a.colors||{}).filter(([,value])=>value!=null&&value!=='').map(([key,value])=>[key,Array.isArray(value)?rgbToHex(value):value]));
-        if(!Object.keys(a.colors).length)delete a.colors;
-        if(Object.keys(a).length)next.appearance=a;else delete next.appearance;
-      }
-      this.config = next;
-      if(changedProvider)this.render();
-      this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: next }, bubbles: true, composed: true }));
-    });
+  }
+  _schemas() {
+    const c=this.config,profile=INTEGRATION_PROFILES[c.provider||'free'];
+    const signature=JSON.stringify([c.provider,Object.keys(c.entities||{}).sort(),Object.keys(c.attributes||{}).sort()]);
+    if(signature===this._schemaSignature)return this._cachedSchemas;
+    this._schemaSignature=signature;
+    const colorGroup=(name,title,keys)=>({name,type:'expandable',flatten:true,title,schema:keys.map(name=>({name,selector:{color_rgb:{}}}))});
+    this._cachedSchemas=[
+      [
+        {name:'provider',selector:{select:{options:Object.entries(PROVIDERS).map(([value,p])=>({value,label:p.name}))}}},
+        ...(profile.automatic ? [{name:'device_id',selector:{device:{integration:profile.domain}}},{name:'auto_detect',selector:{boolean:{}}}] : []),
+      ],
+      [
+        ...['title','model','technology','image'].map(name=>({name,selector:{text:{}}})),
+        ...['hide_public_ip','show_missing','show_controls'].map(name=>({name,selector:{boolean:{}}})),
+      ],
+      [
+        {name:'layout',selector:{select:{options:[{value:'full',label:'Complète'},{value:'compact',label:'Compacte'}]}}},
+        {name:'appearance',type:'grid',column_min_width:'100%',schema:[
+          {name:'dimensions',type:'grid',flatten:true,column_min_width:'160px',schema:Object.entries(APPEARANCE_RANGES).map(([name,max])=>({name,selector:{number:{min:0,max,step:1,mode:'box',unit_of_measurement:'px'}}}))},
+          {name:'colors',type:'grid',column_min_width:'100%',schema:[
+            colorGroup('base_palette','Fonds, textes et bordures',['accent','background','surface','text','muted','border']),
+            colorGroup('rate_palette','Couleurs des débits',['download','upload']),
+            colorGroup('state_palette','États et commandes',['success','warning','danger']),
+          ]},
+        ]},
+      ],
+      [
+        {name:'scales',type:'grid',flatten:true,column_min_width:'160px',schema:['download_max','upload_max'].map(name=>({name,selector:{number:{min:1,mode:'box',unit_of_measurement:'Mbit/s'}}}))},
+        {name:'entities',type:'expandable',title:'Associer les entités',schema:[...new Set([...profile.fields,...Object.keys(c.entities||{})])].map(name=>({name,selector:{entity:['wifi','guest_wifi'].includes(name)?{domain:'switch'}:name==='reboot'?{domain:'button'}:{}}}))},
+        {name:'attributes',type:'expandable',title:'Lire un attribut d’entité',schema:['public_ip','uptime','ethernet_devices','wifi_devices'].filter(name=>profile.fields.includes(name)||c.attributes?.[name]).map(name=>({name,selector:{text:{}}}))},
+      ],
+    ];
+    return this._cachedSchemas;
+  }
+  render() {
+    if(!this.config)return;
+    if(!this._forms)this._mount();
+    const schemas=this._schemas();
+    for(const [index,form] of this._forms.entries()){
+      form.hass=this._hass;
+      form.schema=schemas[index];
+      form.data={auto_detect:true,show_controls:true,show_missing:false,hide_public_ip:true,layout:'full',...this.config,appearance:{...this.config.appearance,colors:Object.fromEntries(Object.entries(this.config.appearance?.colors||{}).map(([key,value])=>[key,hexToRgb(value)]))}};
+    }
+  }
+  _valueChanged(event) {
+    event.stopPropagation();
+    const next={...this.config,...event.detail.value};
+    const changedProvider=next.provider!==this.config.provider;
+    if(changedProvider){next.entities={};next.attributes={};next.diagnostics=[];next.ports=[];next.model=PROVIDERS[next.provider].model;delete next.device_id;delete next.image;delete next.technology;delete next.download_max;delete next.upload_max;}
+    next.entities=Object.fromEntries(Object.entries(next.entities||{}).filter(([,value])=>value));
+    if(next.attributes)next.attributes=Object.fromEntries(Object.entries(next.attributes).filter(([,value])=>value));
+    for(const key of ['download_max','upload_max'])if(next[key]===''||next[key]==null)delete next[key];
+    if(next.appearance){
+      const a={...next.appearance};
+      for(const key of Object.keys(APPEARANCE_RANGES))if(a[key]===''||a[key]==null)delete a[key];
+      a.colors=Object.fromEntries(Object.entries(a.colors||{}).filter(([,value])=>value!=null&&value!=='').map(([key,value])=>[key,Array.isArray(value)?rgbToHex(value):value]));
+      if(!Object.keys(a.colors).length)delete a.colors;
+      if(Object.keys(a).length)next.appearance=a;else delete next.appearance;
+    }
+    this.config=next;this.render();
+    this.dispatchEvent(new CustomEvent('config-changed',{detail:{config:next},bubbles:true,composed:true}));
   }
 }
 if (!customElements.get('isp-box-card')) customElements.define('isp-box-card', IspBoxCard);
