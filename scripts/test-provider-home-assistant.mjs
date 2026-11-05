@@ -21,7 +21,7 @@ try{
  await page.goto(auth.url+'/dashboard-family-test/internet',{waitUntil:'domcontentloaded',timeout:45000});
  const card=page.locator('isp-box-card');await card.waitFor({timeout:60000});
  await page.waitForFunction(version=>customElements.get('isp-box-card')?.version===version,version);
- await page.waitForFunction(()=>{const find=root=>{for(const el of root.querySelectorAll('*')){if(el.localName==='isp-box-card')return el;if(el.shadowRoot){const match=find(el.shadowRoot);if(match)return match;}}};const c=find(document.querySelector('home-assistant').shadowRoot);return c?.settings()._detected_device&&c._registryUnsubscribers?.length===2&&c.shadowRoot.querySelector('.diagnostic-panel')&&c.shadowRoot.querySelector('img')?.naturalWidth>0;},{},{timeout:60000});
+ await page.waitForFunction(()=>{const find=root=>{for(const el of root.querySelectorAll('*')){if(el.localName==='isp-box-card')return el;if(el.shadowRoot){const match=find(el.shadowRoot);if(match)return match;}}};const c=find(document.querySelector('home-assistant').shadowRoot);return c?.settings()._detected_device&&c._registryUnsubscribers?.length===2&&c.shadowRoot.querySelector('.diagnostic-panel')&&(c.config.layout==='compact'||!c.config.image||c.shadowRoot.querySelector('img')?.naturalWidth>0);},{},{timeout:60000});
  const checks=await card.evaluate(c=>{
   const settings=c.settings(),deviceId=settings._detected_device;
   const diagnostics=settings.diagnostics.map(item=>({entity:item.entity,name:item.name,unit:c._hass.states[item.entity]?.attributes?.unit_of_measurement}));
@@ -38,20 +38,38 @@ try{
  for(const width of [1280,390]){await page.setViewportSize({width,height:1800});assert.deepEqual(await card.evaluate(c=>[...c.shadowRoot.querySelectorAll('.tile,.hero,.diagnostic')].filter(el=>el.scrollWidth>el.clientWidth+2).map(el=>el.className)),[]);await card.screenshot({path:`artifacts/provider-adaptation/freebox-${width}.png`});}
  // Real HA editor, inside its context-provider tree. No dashboard save.
  await page.evaluate(()=>{
-  const editor=customElements.get('isp-box-card').getConfigElement();editor.hass=document.querySelector('home-assistant').hass;editor.setConfig({...liveCard.config,device_id:liveCard.settings()._detected_device,show_missing:false,layout:'compact',appearance:{radius:12,gap:10,colors:{accent:'#7c3aed',background:'#f8fafc',text:'#172033'}}});window.previewEditor=editor;
+  const editor=customElements.get('isp-box-card').getConfigElement();editor.hass=document.querySelector('home-assistant').hass;editor.setConfig({...liveCard.config,device_id:liveCard.settings()._detected_device,show_missing:false,layout:'compact',appearance:{radius:12,gap:10,colors:{accent:'#7c3aed',background:'#f8fafc',text:'#172033'}}});editor.addEventListener('config-changed',event=>editor.setConfig(structuredClone(event.detail.config)));window.previewEditor=editor;
   const panel=document.createElement('div');panel.id='profile-editor';panel.style.cssText='position:fixed;inset:0;z-index:99999;overflow:auto;background:var(--card-background-color,#fff);padding:24px';panel.append(editor);document.querySelector('home-assistant').shadowRoot.append(panel);
  });
+ await page.locator('#profile-editor details[data-section=display] > summary').click();
  await page.getByRole('textbox',{name:'Titre personnalisé',exact:true}).fill('Prévisualisation des profils');await page.getByRole('textbox',{name:'Modèle de box',exact:true}).click();
  await page.waitForFunction(()=>previewEditor.config.title==='Prévisualisation des profils');
  assert.equal(await page.locator('#profile-editor ha-entity-picker').count(),7);
  assert.equal(await page.locator('#profile-editor ha-device-picker').count(),1);
- await page.getByText('Apparence',{exact:true}).click();
- await page.getByText('Couleurs personnalisées',{exact:true}).click();
+ await page.locator('#profile-editor details[data-section=appearance] > summary').click();
+ await page.getByText('Fonds, textes et bordures',{exact:true}).click();
+ await page.evaluate(()=>{window.savedAppearanceForm=previewEditor.shadowRoot.querySelector('#appearance-form');});
  await page.locator('#profile-editor ha-selector-color_rgb').first().waitFor();
  assert.equal(await page.locator('#profile-editor ha-selector-color_rgb').count(),11);
  await page.getByRole('spinbutton',{name:'Arrondi des angles',exact:true}).fill('8');
  await page.getByRole('textbox',{name:'Titre personnalisé',exact:true}).click();
  await page.waitForFunction(()=>previewEditor.config.appearance.radius===8);
+ assert.equal(await page.evaluate(()=>previewEditor.shadowRoot.querySelector('#appearance-form')===savedAppearanceForm),true,'HA echo must preserve the appearance form');
+ assert.equal(await page.evaluate(()=>previewEditor.shadowRoot.querySelector('details[data-section=appearance]').open),true,'Appearance section must remain open');
+ assert.equal(await page.getByRole('spinbutton',{name:'Arrondi des angles',exact:true}).isVisible(),true);
+ assert.equal(await page.getByRole('textbox',{name:'Titre personnalisé',exact:true}).isVisible(),true);
+ assert.equal(await page.locator('#profile-editor ha-selector-color_rgb').first().isVisible(),true,'Open color group must survive numeric edits and HA echo');
+ await page.locator('#profile-editor ha-selector-color_rgb').first().evaluate(el=>el.dispatchEvent(new CustomEvent('value-changed',{detail:{value:[34,120,200]},bubbles:true,composed:true})));
+ await page.waitForFunction(()=>previewEditor.config.appearance.colors.accent==='#2278c8');
+ assert.equal(await page.locator('#profile-editor ha-selector-color_rgb').first().isVisible(),true,'Color group must stay open after changing color');
+ const editorChecks=await page.evaluate(()=>({sections:previewEditor.shadowRoot.querySelectorAll('details[data-section]').length,form_reused:previewEditor.shadowRoot.querySelector('#appearance-form')===savedAppearanceForm,appearance_open:previewEditor.shadowRoot.querySelector('details[data-section=appearance]').open,hex_color:previewEditor.config.appearance.colors.accent,flattened_groups_clean:!('dimensions' in previewEditor.config.appearance)&&!('base_palette' in previewEditor.config.appearance.colors)}));
+ assert.equal(editorChecks.sections,4);assert.equal(editorChecks.flattened_groups_clean,true);
+ // Screenshot the native editor at a realistic pane width; no live state values are shown.
+ await page.getByText('Fonds, textes et bordures',{exact:true}).click();
+ await page.evaluate(()=>{for(const el of previewEditor.shadowRoot.querySelectorAll('details[data-section]'))el.open=el.dataset.section==='appearance';});
+ for(const width of [520,390]){await page.setViewportSize({width,height:1800});await page.locator('#profile-editor isp-box-card-editor').screenshot({path:`artifacts/provider-adaptation/editor-${width}.png`});}
+
+
  // Compact + a light custom palette on real states, in this temporary DOM only.
  await page.evaluate(()=>liveCard.setConfig({...liveCard.config,layout:'compact',appearance:{radius:8,gap:10,padding:12,colors:{accent:'#7c3aed',background:'#f8fafc',surface:'#fff',text:'#172033',muted:'#475569',border:'#cbd5e1',download:'#0369a1',upload:'#15803d'}}}));
  await page.evaluate(()=>document.querySelector('home-assistant').shadowRoot.querySelector('#profile-editor').remove());
@@ -59,7 +77,7 @@ try{
  for(const width of [1280,390]){await page.setViewportSize({width,height:1800});assert.deepEqual(await card.evaluate(c=>[...c.shadowRoot.querySelectorAll('.tile,.hero,.diagnostic')].filter(el=>el.scrollWidth>el.clientWidth+2).map(el=>el.className)),[]);await card.screenshot({path:`artifacts/provider-adaptation/appearance-compact-${width}.png`});}
  assert.deepEqual(errors,[]);assert.deepEqual(await page.evaluate(()=>window.__blocked),[]);
  const after=await snapshot();assert.deepEqual(after,before);
- const report={passed:true,version:checks.version,preview_only:true,installed_module_modified:false,real_home_assistant:true,real_freebox:true,other_providers:'synthetic fixtures only',module_sha256:createHash('sha256').update(moduleBytes).digest('hex'),checks,page_errors:errors,service_calls:0,all_dashboards_and_resources_unchanged:true};
+ const report={passed:true,version:checks.version,preview_only:true,installed_module_modified:false,real_home_assistant:true,real_freebox:true,other_providers:'synthetic fixtures only',editor:editorChecks,module_sha256:createHash('sha256').update(moduleBytes).digest('hex'),checks,page_errors:errors,service_calls:0,all_dashboards_and_resources_unchanged:true};
  await writeFile('artifacts/provider-adaptation/verification.json',JSON.stringify(report,null,2));
  console.log(JSON.stringify(report,null,2));
 }finally{api.close();await browser.close();}

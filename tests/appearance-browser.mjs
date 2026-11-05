@@ -59,6 +59,7 @@ try{
  await page.evaluate(()=>{
   editor.setConfig({...original,layout:'compact',appearance:{radius:0,colors:{accent:'#7c3aed'}},diagnostics:[{entity:'sensor.demo_zero',name:'Custom'}]});
  });
+ await page.locator('isp-box-card-editor details[data-section=appearance] > summary').click();
  await page.locator('isp-box-card-editor #reset-appearance').click();
  assert.equal(await page.evaluate(()=>emitted.appearance),undefined);assert.equal(await page.evaluate(()=>emitted.layout),undefined);
  assert.equal(await page.evaluate(()=>emitted.diagnostics[0].name),'Custom');assert.deepEqual(await page.evaluate(()=>emitted.entities),await page.evaluate(()=>original.entities));

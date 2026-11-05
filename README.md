@@ -72,7 +72,7 @@ Choisissez **une seule** méthode : HACS ou installation manuelle. Il n’est pa
 
    | Paramètre | Valeur |
    |---|---|
-   | URL | `/local/isp-box-card.js?v=0.3.0` |
+   | URL | `/local/isp-box-card.js?v=0.3.1` |
    | Type | Module JavaScript |
 
    Activez le **mode avancé** de votre profil si le menu Ressources n’est pas visible.
@@ -143,7 +143,7 @@ Les images opérateur ne sont pas fournies avec la carte. Elles restent indépen
 
 ## Personnaliser le format et les couleurs
 
-Dans l’éditeur visuel, choisissez le **Format**, puis ouvrez **Apparence** : arrondi, espacement, marge intérieure et sélecteurs de couleurs. Le bouton **Réinitialiser l’apparence** restaure le rendu par défaut sans modifier vos entités ni vos options réseau.
+L’éditeur est organisé en quatre sections : **Box et connexion**, **Affichage et confidentialité**, **Apparence et format**, **Données avancées**. Dans **Apparence et format**, choisissez le format, ajustez les dimensions, puis ouvrez la palette souhaitée : **Fonds, textes et bordures**, **Couleurs des débits** ou **États et commandes**. Les sections ouvertes et le focus sont conservés pendant les modifications. Le bouton **Réinitialiser l’apparence** restaure le rendu par défaut sans modifier vos entités ni vos options réseau.
 
 - **Complet** (`full`, défaut) : présentation illustrée habituelle.
 - **Compact** (`compact`) : en-tête sans grande illustration et blocs plus denses, avec les mêmes mesures, diagnostics et commandes.
@@ -175,7 +175,7 @@ Les couleurs non renseignées conservent leur valeur par défaut ; sans accent p
 ## Mise à jour
 
 - **HACS** : installez la mise à jour proposée, puis rechargez complètement le navigateur. Conservez la ressource gérée par HACS.
-- **Manuelle** : remplacez `/config/www/isp-box-card.js`, puis modifiez le paramètre de version dans la ressource existante, par exemple `?v=0.3.0` vers le numéro de la version installée. N’ajoutez pas une deuxième ressource.
+- **Manuelle** : remplacez `/config/www/isp-box-card.js`, puis modifiez le paramètre de version dans la ressource existante, par exemple `?v=0.3.1` vers le numéro de la version installée. N’ajoutez pas une deuxième ressource.
 
 Conservez vos images et la configuration de vos cartes. Consultez le [journal des versions](CHANGELOG.md) avant une mise à jour.
 

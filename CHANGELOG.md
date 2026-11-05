@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.1
+
+- Éditeur réorganisé en quatre sections : box, affichage/confidentialité, apparence/format, données avancées.
+- Couleurs regroupées en trois palettes et réglages de dimensions alignés selon la largeur disponible.
+- Correction de la fermeture des sections et de la perte de focus après modification : formulaires montés une seule fois et schémas stables lors du retour de configuration HA.
+- Régression reproduite puis testée avec des mises à jour répétées et l’éditeur natif Home Assistant, sans modifier les dashboards ni appeler de service réseau.
+
 ## 0.3.0
 
 - Formats complet et compact, sans perte de mesures ni de commandes.
