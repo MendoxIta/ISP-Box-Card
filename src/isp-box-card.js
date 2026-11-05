@@ -1,11 +1,37 @@
 /* ISP Box Card — MIT. Uses only authenticated HA registry/state data. */
 import { INTEGRATION_PROFILES, EXTRA_METRICS, resolveProviderConfig } from './provider-profiles.js';
-export const VERSION = '0.2.0';
+export const VERSION = '0.3.0';
 export const PROVIDERS = {
   free: { name: 'Free', color: '#ed3346', model: 'Freebox' },
   orange: { name: 'Orange', color: '#ff7900', model: 'Livebox' },
   bouygues: { name: 'Bouygues Telecom', color: '#00b6ce', model: 'Bbox' },
   sfr: { name: 'SFR', color: '#e52838', model: 'SFR Box' },
+};
+export const COLOR_ROLES = {
+  accent:'Accent opérateur', background:'Fond de la carte', surface:'Fond des blocs',
+  text:'Texte principal', muted:'Texte secondaire', border:'Bordures',
+  download:'Débit descendant', upload:'Débit montant', success:'État actif / connecté',
+  warning:'Informations et avertissements', danger:'Erreur et redémarrage',
+};
+const APPEARANCE_RANGES = {radius:40, gap:24, padding:32};
+export function appearanceStyle(config) {
+  const a=config.appearance||{}, declarations=[`--accent:${a.colors?.accent||PROVIDERS[config.provider].color}`];
+  for(const [key,value] of Object.entries(a.colors||{}))if(key!=='accent')declarations.push(`--isp-${key}:${value}`);
+  for(const key of Object.keys(APPEARANCE_RANGES))if(a[key]!=null)declarations.push(`--isp-${key}:${a[key]}px`);
+  if(a.colors?.danger){
+    declarations.push(`--isp-danger-surface:color-mix(in srgb,${a.colors.danger} 16%,var(--isp-background,#090a0b))`);
+    declarations.push(`--isp-danger-deep:color-mix(in srgb,${a.colors.danger} 6%,var(--isp-background,#090a0b))`);
+  }
+  if(a.colors?.success)declarations.push(`--isp-success-surface:color-mix(in srgb,${a.colors.success} 24%,var(--isp-background,#090a0b))`);
+  return declarations.join(';');
+}
+const hexToRgb = hex => {
+  const full=hex.length===4 ? hex.slice(1).split('').map(c=>c+c).join('') : hex.slice(1);
+  return [0,2,4].map(index=>parseInt(full.slice(index,index+2),16));
+};
+const rgbToHex = rgb => {
+  if(rgb.length!==3||rgb.some(value=>!Number.isInteger(value)||value<0||value>255))throw new Error('Couleur RGB invalide.');
+  return '#'+rgb.map(value=>value.toString(16).padStart(2,'0')).join('');
 };
 const METRICS = ['connection', 'download', 'upload', 'devices', 'ethernet_devices', 'wifi_devices', 'public_ip', 'uptime', 'optical_rx', 'optical_tx', 'wifi', 'guest_wifi', 'reboot', ...Object.keys(EXTRA_METRICS)];
 const LABELS = { connection: 'Connexion Internet', download: 'Débit descendant', upload: 'Débit montant', devices: 'Appareils connectés', ethernet_devices: 'Appareils Ethernet', wifi_devices: 'Appareils Wi-Fi', public_ip: 'IP publique', uptime: 'Temps de fonctionnement', optical_rx: 'Puissance optique RX', optical_tx: 'Puissance optique TX', wifi: 'Wi-Fi principal', guest_wifi: 'Wi-Fi invité', reboot: 'Redémarrage', ...Object.fromEntries(Object.entries(EXTRA_METRICS).map(([key, value])=>[key,value.name])) };
@@ -102,6 +128,17 @@ export function validateConfig(config) {
     if (!port || typeof port.name !== 'string' || !port.name.trim()) throw new Error('Chaque port doit avoir un nom.');
     for (const key of ['download', 'upload']) if (port[key] != null && (typeof port[key] !== 'string' || !/^[a-z_]+\.[a-z0-9_]+$/.test(port[key]))) throw new Error(`Entité de port invalide : ${key}`);
   }
+  if(config.layout!=null && !['full','compact'].includes(config.layout))throw new Error('layout doit être full ou compact.');
+  if(config.appearance!=null){
+    const a=config.appearance;
+    if(typeof a!=='object'||Array.isArray(a))throw new Error('appearance doit être un objet.');
+    for(const key of Object.keys(a))if(!['colors',...Object.keys(APPEARANCE_RANGES)].includes(key))throw new Error(`Option d’apparence inconnue : ${key}`);
+    for(const [key,max] of Object.entries(APPEARANCE_RANGES))if(a[key]!=null && (!Number.isInteger(a[key])||a[key]<0||a[key]>max))throw new Error(`${key} doit être un entier entre 0 et ${max} px.`);
+    if(a.colors!=null){
+      if(typeof a.colors!=='object'||Array.isArray(a.colors))throw new Error('appearance.colors doit être un objet.');
+      for(const [key,value] of Object.entries(a.colors))if(!Object.hasOwn(COLOR_ROLES,key)||typeof value!=='string'||!/^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(value))throw new Error(`Couleur ${key} invalide : utiliser #RGB ou #RRGGBB.`);
+    }
+  }
   return structuredClone(config);
 }
 const iconPaths = {
@@ -116,13 +153,41 @@ const iconPaths = {
 };
 const icon = name => `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${iconPaths[name]}</svg>`;
 const CSS = `
-:host{display:block;container-type:inline-size;color:#f5f5f5;font-family:var(--paper-font-body1_-_font-family,Roboto,'Segoe UI',sans-serif);font-variant-numeric:tabular-nums}*{box-sizing:border-box}ha-card{display:block;background:#090a0b;color:#f5f5f5;border:0;border-radius:22px;padding:12px;box-shadow:none}.layout{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.tile,.hero{border:1px solid #303033;border-radius:19px;background:linear-gradient(135deg,#1c1d1f,#111214);min-width:0}.hero{grid-column:1/-1;overflow:hidden;position:relative;padding:22px 22px 0;background:radial-gradient(ellipse at 50% 100%,color-mix(in srgb,var(--accent) 23%,#090a0b),#0d0e0f 70%)}.heading{display:flex;align-items:center;gap:16px;position:relative;z-index:1}.brand{font-weight:800;font-size:19px;color:var(--accent);border-right:2px solid var(--accent);padding-right:16px}.titles{flex:1;min-width:0}.titles h2{font-size:clamp(21px,5.6cqi,40px);line-height:1.05;margin:0 0 6px;overflow-wrap:anywhere;text-transform:uppercase;letter-spacing:-.8px}.subtitle{color:#b8b8bd;text-transform:uppercase;letter-spacing:1px;font-size:clamp(10px,2.5cqi,14px)}.badge{font-size:12px;border:1px solid currentColor;border-radius:30px;padding:7px 10px;white-space:nowrap}.online{color:#39e76d}.offline{color:#ff5a66}.unknown{color:#b2b4bc}.box-stage{height:190px;display:grid;place-items:center;position:relative}.box-stage img{width:100%;height:100%;object-fit:contain;filter:drop-shadow(0 12px 18px color-mix(in srgb,var(--accent) 30%,transparent))}.placeholder{display:flex;align-items:center;gap:12px;color:#aaaeb7;font-size:13px;text-align:left;max-width:280px;line-height:1.6}.placeholder .icon{color:var(--accent);width:56px;height:56px;flex-shrink:0}.tile{padding:18px;display:flex;gap:16px;align-items:center}.icon{width:40px;height:40px;flex-shrink:0;filter:drop-shadow(0 0 7px color-mix(in srgb,currentColor 25%,transparent))}.blue{color:#16b6ff}.green{color:#32e86a}.amber{color:#ffab2d}.content{min-width:0}.label{font-size:13px;color:#c3c4c9;margin-bottom:6px;line-height:1.35}.value{font-size:21px;font-weight:650;overflow-wrap:anywhere;line-height:1.25}.detail{font-size:12px;color:#a7a9b2;margin-top:5px}.gauge{display:block;text-align:center;padding:16px 12px 12px}.dial{position:relative;max-width:240px;margin:0 auto}.dial svg{display:block;width:100%;height:auto}.dial path{fill:none;stroke-width:16}.dial .track{stroke:#303236}.dial .arc{stroke:var(--gauge);stroke-linecap:butt}.reading{position:absolute;inset:45% 0 0;display:flex;flex-direction:column;justify-content:center;font-size:clamp(25px,6cqi,43px);font-weight:700;line-height:1.1}.reading small{font-size:13px;font-weight:500;margin-top:4px}.wide{grid-column:1/-1}.ports{display:block}.section-title{display:flex;align-items:center;gap:12px;font-weight:650;margin-bottom:16px;font-size:17px}.section-title .icon{width:28px;height:28px}.port-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:12px}.port{border-left:1px solid #36373a;padding-left:14px;font-size:13px;line-height:1.8;overflow-wrap:anywhere}.port-name{color:#c3c4c9}.wifi-panel{display:block}.wifi-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 0;border-top:1px solid #303033;font-size:13px}.wifi-row:first-of-type{border:0}button{font:inherit;cursor:pointer;color:inherit}button:focus-visible{outline:3px solid #69caff;outline-offset:4px}button:disabled{cursor:not-allowed;opacity:.5}.toggle{border:1px solid #45464a;border-radius:30px;background:#303236;min-width:58px;min-height:44px;font-weight:700}.toggle[aria-checked=true]{background:#126b31;border-color:#248e45;color:#bdffcf}.reboot{background:linear-gradient(135deg,#291315,#171011);border:1px solid #d4434e;text-align:left;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;min-height:154px;width:100%}.reboot .icon{color:#ff525e}.reboot strong{font-size:20px}.reboot small{font-size:12px;color:#c1aeb1;line-height:1.5;margin-top:10px}.error{color:#ffadb5;font-size:13px;padding:12px;grid-column:1/-1}.privacy{background:transparent;border:0;text-align:left;padding:0;min-height:44px}.privacy .detail{display:block}.image-error{color:#ffadb5;font-size:12px}.busy{opacity:.6}
-@container(max-width:460px){ha-card{padding:8px}.layout{gap:8px}.hero{padding:16px 14px 0}.heading{gap:10px;flex-wrap:wrap}.brand{font-size:14px;padding-right:10px}.badge{font-size:10px;padding:5px 8px}.box-stage{height:150px}.tile{padding:13px;gap:9px}.tile>.icon{width:28px;height:28px}.label{font-size:11px}.value{font-size:17px}.detail{font-size:11px}.reboot strong{font-size:16px}.section-title{font-size:15px}.wifi-row{font-size:11px}}
+:host{display:block;container-type:inline-size;color:var(--isp-text,#f5f5f5);font-family:var(--paper-font-body1_-_font-family,Roboto,'Segoe UI',sans-serif);font-variant-numeric:tabular-nums}*{box-sizing:border-box}ha-card{display:block;background:var(--isp-background,#090a0b);color:var(--isp-text,#f5f5f5);border:0;border-radius:var(--isp-radius,22px);padding:12px;box-shadow:none}.layout{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:min(var(--isp-gap,10px),3cqi)}.tile,.hero{border:1px solid var(--isp-border,#303033);border-radius:var(--isp-radius,19px);background:linear-gradient(135deg,var(--isp-surface,#1c1d1f),var(--isp-surface,#111214));min-width:0}.hero{grid-column:1/-1;overflow:hidden;position:relative;padding:22px 22px 0;background:radial-gradient(ellipse at 50% 100%,color-mix(in srgb,var(--accent) 23%,var(--isp-background,#090a0b)),var(--isp-background,#0d0e0f) 70%)}.heading{display:flex;align-items:center;gap:16px;position:relative;z-index:1}.brand{font-weight:800;font-size:19px;color:var(--accent);border-right:2px solid var(--accent);padding-right:16px}.titles{flex:1;min-width:0}.titles h2{font-size:clamp(21px,5.6cqi,40px);line-height:1.05;margin:0 0 6px;overflow-wrap:anywhere;text-transform:uppercase;letter-spacing:-.8px}.subtitle{color:var(--isp-muted,#b8b8bd);text-transform:uppercase;letter-spacing:1px;font-size:clamp(10px,2.5cqi,14px)}.badge{font-size:12px;border:1px solid currentColor;border-radius:30px;padding:7px 10px;white-space:nowrap}.online{color:var(--isp-success,#39e76d)}.offline{color:var(--isp-danger,#ff5a66)}.unknown{color:var(--isp-muted,#b2b4bc)}.box-stage{height:190px;display:grid;place-items:center;position:relative}.box-stage img{width:100%;height:100%;object-fit:contain;filter:drop-shadow(0 12px 18px color-mix(in srgb,var(--accent) 30%,transparent))}.placeholder{display:flex;align-items:center;gap:12px;color:var(--isp-muted,#aaaeb7);font-size:13px;text-align:left;max-width:280px;line-height:1.6}.placeholder .icon{color:var(--accent);width:56px;height:56px;flex-shrink:0}.tile{padding:18px;display:flex;gap:16px;align-items:center}.icon{width:40px;height:40px;flex-shrink:0;filter:drop-shadow(0 0 7px color-mix(in srgb,currentColor 25%,transparent))}.blue{color:var(--isp-download,#16b6ff)}.green{color:var(--isp-success,#32e86a)}.amber{color:var(--isp-warning,#ffab2d)}.content{min-width:0}.label{font-size:13px;color:var(--isp-muted,#c3c4c9);margin-bottom:6px;line-height:1.35}.value{font-size:21px;font-weight:650;overflow-wrap:anywhere;line-height:1.25}.detail{font-size:12px;color:var(--isp-muted,#a7a9b2);margin-top:5px}.gauge{display:block;text-align:center;padding:16px 12px 12px}.dial{position:relative;max-width:240px;margin:0 auto}.dial svg{display:block;width:100%;height:auto}.dial path{fill:none;stroke-width:16}.dial .track{stroke:var(--isp-surface,#303236)}.dial .arc{stroke:var(--gauge);stroke-linecap:butt}.reading{position:absolute;inset:45% 0 0;display:flex;flex-direction:column;justify-content:center;font-size:clamp(25px,6cqi,43px);font-weight:700;line-height:1.1}.reading small{font-size:13px;font-weight:500;margin-top:4px}.wide{grid-column:1/-1}.ports{display:block}.section-title{display:flex;align-items:center;gap:12px;font-weight:650;margin-bottom:16px;font-size:17px}.section-title .icon{width:28px;height:28px}.port-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:12px}.port{border-left:1px solid var(--isp-border,#36373a);padding-left:14px;font-size:13px;line-height:1.8;overflow-wrap:anywhere}.port-name{color:var(--isp-muted,#c3c4c9)}.wifi-panel{display:block}.wifi-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 0;border-top:1px solid var(--isp-border,#303033);font-size:13px}.wifi-row:first-of-type{border:0}button{font:inherit;cursor:pointer;color:inherit}button:focus-visible{outline:3px solid var(--isp-download,#69caff);outline-offset:4px}button:disabled{cursor:not-allowed;opacity:.5}.toggle{border:1px solid var(--isp-border,#45464a);border-radius:30px;background:var(--isp-surface,#303236);min-width:58px;min-height:44px;font-weight:700}.toggle[aria-checked=true]{background:var(--isp-success-surface,#126b31);border-color:var(--isp-success,#248e45);color:var(--isp-text,#bdffcf)}.reboot{background:linear-gradient(135deg,var(--isp-danger-surface,#291315),var(--isp-danger-deep,#171011));border:1px solid var(--isp-danger,#d4434e);text-align:left;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;min-height:154px;width:100%}.reboot .icon{color:var(--isp-danger,#ff525e)}.reboot strong{font-size:20px}.reboot small{font-size:12px;color:var(--isp-muted,#c1aeb1);line-height:1.5;margin-top:10px}.error{color:var(--isp-danger,#ffadb5);font-size:13px;padding:12px;grid-column:1/-1}.privacy{background:transparent;border:0;text-align:left;padding:0;min-height:44px}.privacy .detail{display:block}.image-error{color:var(--isp-danger,#ffadb5);font-size:12px}.busy{opacity:.6}
+@container(max-width:460px){ha-card{padding:8px}.layout{gap:min(var(--isp-gap,8px),3cqi)}.hero{padding:16px 14px 0}.heading{gap:10px;flex-wrap:wrap}.brand{font-size:14px;padding-right:10px}.badge{font-size:10px;padding:5px 8px}.box-stage{height:150px}.tile{padding:13px;gap:9px}.tile>.icon{width:28px;height:28px}.label{font-size:11px}.value{font-size:17px}.detail{font-size:11px}.reboot strong{font-size:16px}.section-title{font-size:15px}.wifi-row{font-size:11px}}
 @container(max-width:310px){.tile:not(.gauge){grid-column:1/-1}.badge{margin-left:auto}.brand{max-width:90px}.gauge{padding:12px 6px}.reading{font-size:25px}.label{font-size:11px}}
-.diagnostic-panel{display:block}.diagnostic-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 22px;margin:0}.diagnostic{min-width:0;padding:10px 0;border-top:1px solid #33363a}.diagnostic dt{font-size:12px;color:#bfc3cc;overflow-wrap:anywhere}.diagnostic dd{font-size:18px;font-weight:600;margin:7px 0 0;overflow-wrap:anywhere}
+.diagnostic-panel{display:block}.diagnostic-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 22px;margin:0}.diagnostic{min-width:0;padding:10px 0;border-top:1px solid var(--isp-border,#33363a)}.diagnostic dt{font-size:12px;color:var(--isp-muted,#bfc3cc);overflow-wrap:anywhere}.diagnostic dd{font-size:18px;font-weight:600;margin:7px 0 0;overflow-wrap:anywhere}
 /* Reference composition: illustrated header, compact facts, illuminated dials. */
-.hero{background:radial-gradient(ellipse at 50% 85%,color-mix(in srgb,var(--accent) 26%,#090a0b),#0c0d0f 72%);padding-top:24px}.box-stage{height:230px;isolation:isolate}.box-stage:after{content:'';position:absolute;bottom:22px;width:62%;height:16px;border-radius:50%;background:var(--accent);opacity:.24;filter:blur(18px);z-index:-1}.box-stage img{max-width:530px;height:230px;object-fit:contain;filter:drop-shadow(0 20px 16px #0009)}.brand[data-provider=free]{font-family:Georgia,serif;font-style:italic;font-size:32px;letter-spacing:-2px;text-transform:lowercase}.brand[data-provider=orange]{background:#ff7900;color:#070707;border:0;letter-spacing:-1px;padding:14px 6px;align-self:stretch;display:grid;align-items:end}.titles h2{letter-spacing:-1px}.tile{min-height:104px}.gauge{padding-top:19px;min-height:210px}.gauge .label{font-size:15px;color:#f0f0f3;font-weight:500;margin-bottom:14px}.dial .track{stroke:color-mix(in srgb,var(--gauge) 8%,#25272b)}.dial .arc{stroke:var(--gauge)}.ticks{stroke:color-mix(in srgb,var(--gauge) 45%,#42505d);stroke-width:1}.gauge .label{color:var(--gauge)}.reading{inset:45% 0 3%;font-weight:650}.reading small{color:#bcc2cc}.gauge>.detail{margin-top:12px}.privacy{width:100%}.privacy .value{margin-top:6px;white-space:nowrap;font-size:clamp(11px,3.7cqi,21px);letter-spacing:-.35px}.wifi-row small{display:block;font-size:10px}.reboot{display:grid;grid-template-columns:40px minmax(0,1fr) 14px;column-gap:15px;align-content:center;align-items:center}.reboot>.icon{grid-column:1;grid-row:1/3;width:40px;height:40px}.reboot strong{grid-column:2;font-size:18px;line-height:1.35;overflow-wrap:anywhere}.reboot small{grid-column:2;margin-top:6px}.reboot-chevron{grid-column:3;grid-row:1/3;font-size:32px;color:#f5c2c7}.port-grid{gap:10px}.port:first-child{border:0;padding-left:0}.port .port-name{font-weight:600;margin-bottom:7px}.port{line-height:1.9}.wifi-panel{align-content:center}.wifi-row{gap:7px}.toggle{min-height:38px}.detail{overflow-wrap:anywhere}
+.hero{background:radial-gradient(ellipse at 50% 85%,color-mix(in srgb,var(--accent) 26%,var(--isp-background,#090a0b)),var(--isp-background,#0c0d0f) 72%);padding-top:24px}.box-stage{height:230px;isolation:isolate}.box-stage:after{content:'';position:absolute;bottom:22px;width:62%;height:16px;border-radius:50%;background:var(--accent);opacity:.24;filter:blur(18px);z-index:-1}.box-stage img{max-width:530px;height:230px;object-fit:contain;filter:drop-shadow(0 20px 16px #0009)}.brand[data-provider=free]{font-family:Georgia,serif;font-style:italic;font-size:32px;letter-spacing:-2px;text-transform:lowercase}.brand[data-provider=orange]{background:var(--accent);color:#070707;border:0;letter-spacing:-1px;padding:14px 6px;align-self:stretch;display:grid;align-items:end}.titles h2{letter-spacing:-1px}.tile{min-height:104px}.gauge{padding-top:19px;min-height:210px}.gauge .label{font-size:15px;color:var(--isp-text,#f0f0f3);font-weight:500;margin-bottom:14px}.dial .track{stroke:color-mix(in srgb,var(--gauge) 8%,#25272b)}.dial .arc{stroke:var(--gauge)}.ticks{stroke:color-mix(in srgb,var(--gauge) 45%,#42505d);stroke-width:1}.gauge .label{color:var(--gauge)}.reading{inset:45% 0 3%;font-weight:650}.reading small{color:var(--isp-muted,#bcc2cc)}.gauge>.detail{margin-top:12px}.privacy{width:100%}.privacy .value{margin-top:6px;white-space:nowrap;font-size:clamp(11px,3.7cqi,21px);letter-spacing:-.35px}.wifi-row small{display:block;font-size:10px}.reboot{display:grid;grid-template-columns:40px minmax(0,1fr) 14px;column-gap:15px;align-content:center;align-items:center}.reboot>.icon{grid-column:1;grid-row:1/3;width:40px;height:40px}.reboot strong{grid-column:2;font-size:18px;line-height:1.35;overflow-wrap:anywhere}.reboot small{grid-column:2;margin-top:6px}.reboot-chevron{grid-column:3;grid-row:1/3;font-size:32px;color:var(--isp-muted,#f5c2c7)}.port-grid{gap:10px}.port:first-child{border:0;padding-left:0}.port .port-name{font-weight:600;margin-bottom:7px}.port{line-height:1.9}.wifi-panel{align-content:center}.wifi-row{gap:7px}.toggle{min-height:38px}.detail{overflow-wrap:anywhere}
 @container(max-width:460px){.box-stage,.box-stage img{height:180px}.brand[data-provider=free]{font-size:25px}.hero{padding-top:18px}.tile{min-height:96px}.gauge{min-height:166px}.gauge .label{font-size:12px;margin-bottom:12px}.gauge>.detail{font-size:10px;margin-top:8px}.reboot{grid-template-columns:28px minmax(0,1fr);column-gap:8px}.reboot>.icon{width:28px;height:28px}.reboot strong{font-size:14px}.reboot-chevron{display:none}.reboot small{font-size:10px}.reading small{font-size:11px}.toggle{min-width:43px;min-height:44px}.wifi-row{flex-wrap:wrap}.port-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.port{border:0;padding:0}.ip-tile>.blue{display:none}.detail{font-size:12px}.reboot small{font-size:11px}.wifi-row small{font-size:11px}}
+/* Compact keeps the same metrics/actions; only the illustration and density change. */
+.compact .hero{padding:14px}
+.compact .brand{font-size:20px;padding-right:10px}
+.compact .titles h2{font-size:clamp(18px,4cqi,26px)}
+.compact .subtitle{font-size:10px}
+.compact .badge{font-size:10px;padding:5px 8px}
+.compact .tile{padding:12px;gap:10px;min-height:80px}
+.compact .tile>.icon{width:28px;height:28px}
+.compact .gauge{min-height:0;padding:12px 8px}
+.compact .dial{max-width:160px}
+.compact .reading{font-size:clamp(23px,5cqi,34px)}
+.compact .gauge .label{font-size:12px;margin-bottom:8px}
+.compact .gauge>.detail{margin-top:6px}
+.compact .section-title{font-size:14px;margin-bottom:8px}
+.compact .diagnostic-grid{gap:8px 14px}
+.compact .diagnostic{padding:6px 0}
+.compact .diagnostic dd{font-size:15px;margin-top:4px}
+.compact .wifi-row{padding:8px 0}
+.compact .toggle{min-height:44px}
+.compact .reboot{grid-template-columns:28px minmax(0,1fr) 14px;min-height:90px}
+.compact .reboot>.icon{width:28px;height:28px}
+.compact .reboot strong{font-size:14px}
+.compact .reboot small{font-size:11px}
+/* Clamp custom spacing on narrow cards rather than clipping text or targets. */
+ha-card.custom-padding{padding:min(var(--isp-padding),4cqi)}
+.custom-padding .tile,.custom-padding .hero{padding:min(var(--isp-padding),4cqi)}
+@container(max-width:310px){.compact .reboot{grid-template-columns:28px minmax(0,1fr)}}
+
 `;
 
 export class IspBoxCard extends HTMLElement {
@@ -214,7 +279,7 @@ export class IspBoxCard extends HTMLElement {
     const signature = JSON.stringify([Math.floor(Date.now() / 60000), ids.map(id => hass?.states?.[id])]);
     if (signature !== this._signature) { this._signature = signature; this.render(); }
   }
-  getCardSize() { return 12; }
+  getCardSize() { return this.config?.layout==='compact' ? 8 : 12; }
   getGridOptions() { return { columns: 12, min_columns: 6 }; }
   static getConfigElement() { return document.createElement('isp-box-card-editor'); }
   static getStubConfig() { return { type: 'custom:isp-box-card', provider: 'free', model: 'Freebox Ultra', auto_detect: true, entities: {}, hide_public_ip: true }; }
@@ -286,15 +351,15 @@ export class IspBoxCard extends HTMLElement {
     const status = connectionState(this.entity('connection')?.state);
     const statusLabel = { online: 'Connectée', offline: 'Déconnectée', unknown: 'État inconnu' }[status];
     const content = [];
-    content.push(`<header class="hero"><div class="heading"><div class="brand" data-provider="${c.provider}">${escape(p.name)}</div><div class="titles"><h2>${escape(c.title || c.model || p.model)}</h2><div class="subtitle">${escape(c.technology || 'Connexion Internet')}</div></div>${has('connection') ? `<span class="badge ${status}">● ${statusLabel}</span>` : `<span class="badge unknown">${escape(c._integration)}</span>`}</div><div class="box-stage">${c.image ? `<img src="${escape(c.image)}" alt="${escape(c.model || p.model)}">` : `<div class="placeholder">${icon('port')}<span>${escape(c.model || p.model)}<br>Ajoutez votre visuel de box<br>dans la configuration.</span></div>`}</div></header>`);
+    content.push(`<header class="hero"><div class="heading"><div class="brand" data-provider="${c.provider}">${escape(p.name)}</div><div class="titles"><h2>${escape(c.title || c.model || p.model)}</h2><div class="subtitle">${escape(c.technology || 'Connexion Internet')}</div></div>${has('connection') ? `<span class="badge ${status}">● ${statusLabel}</span>` : `<span class="badge unknown">${escape(c._integration)}</span>`}</div>${c.layout==='compact' ? '' : `<div class="box-stage">${c.image ? `<img src="${escape(c.image)}" alt="${escape(c.model || p.model)}">` : `<div class="placeholder">${icon('port')}<span>${escape(c.model || p.model)}<br>Ajoutez votre visuel de box<br>dans la configuration.</span></div>`}</div>`}</header>`);
     if (show('connection')) content.push(`<section class="tile"><span class="${status}">${icon('wifi')}</span><div><div class="label">Connexion Internet</div><div class="value ${status}">${statusLabel}</div><div class="detail">${escape(c.technology || '')}</div></div></section>`);
     if (show('devices')) content.push(this.tile('devices', 'devices', 'blue', ['ethernet_devices', 'wifi_devices'].filter(has).map(key => `${this.text(key)} ${key === 'wifi_devices' ? 'Wi-Fi' : 'Ethernet'}`).join(' · ')));
     if (show('public_ip')) content.push(`<section class="tile ip-tile"><span class="blue">${icon('globe')}</span><button class="privacy content" data-action="privacy" aria-label="Afficher ou masquer l’adresse IP publique" aria-pressed="${this._revealed}"><span class="label">IP publique</span><div class="value">${escape(!this._revealed ? '••• ••• ••• •••' : this.text('public_ip'))}</div><span class="detail">Cliquer pour ${this._revealed ? 'masquer' : 'afficher'}</span></button></section>`);
     if (show('uptime')) content.push(this.tile('uptime', 'clock', 'amber', this.entity('uptime') && /^\d{4}-/.test(this.entity('uptime').state) ? `Démarrage : ${this.entity('uptime').state.replace('T', ' ')}` : ''));
     if (show('optical_rx')) content.push(this.tile('optical_rx', 'down', 'blue'));
     if (show('optical_tx')) content.push(this.tile('optical_tx', 'up', 'amber'));
-    if (show('download')) content.push(this.gauge('download', '#10b5ff'));
-    if (show('upload')) content.push(this.gauge('upload', '#2ce56b'));
+    if (show('download')) content.push(this.gauge('download', c.appearance?.colors?.download || '#10b5ff'));
+    if (show('upload')) content.push(this.gauge('upload', c.appearance?.colors?.upload || '#2ce56b'));
     if (c.ports?.some(port=>port.download||port.upload)) {
       const rate = id => { const state = this._hass?.states?.[id]; const value = rateMbps(state?.state, state?.attributes?.unit_of_measurement); return value == null ? '—' : `${number(value)} Mbit/s`; };
       content.push(`<section class="tile wide ports"><div class="section-title"><span class="blue">${icon('port')}</span>Débits Ethernet</div><div class="port-grid">${(c.ports || [{name:'Ports non configurés'}]).map(port => `<div class="port"><div class="port-name">${escape(port.name)}</div><div><span class="blue">↓</span> ${rate(port.download)}</div><div><span class="amber">↑</span> ${rate(port.upload)}</div></div>`).join('')}</div></section>`);
@@ -306,7 +371,7 @@ export class IspBoxCard extends HTMLElement {
     if(c._notice || (this._discoveryError && !Object.keys(c.entities).length))content.push(`<div class="detail wide" role="status">${escape(c._notice||this._discoveryError)}</div>`);
     if (this._error) content.push(`<div class="error" role="alert">${escape(this._error)}</div>`);
     const focusedAction = this.shadowRoot.activeElement?.dataset.action;
-    this.shadowRoot.innerHTML = `<style>${CSS}</style><ha-card style="--accent:${p.color}"><div class="layout" aria-busy="${this._busy}">${content.join('')}</div></ha-card>`;
+    this.shadowRoot.innerHTML = `<style>${CSS}</style><ha-card class="${c.layout==='compact' ? 'compact' : 'full'}${c.appearance?.padding!=null ? ' custom-padding' : ''}" style="${appearanceStyle(c)}"><div class="layout" aria-busy="${this._busy}">${content.join('')}</div></ha-card>`;
     if (focusedAction) this.shadowRoot.querySelector(`[data-action="${focusedAction}"]`)?.focus();
     const image = this.shadowRoot.querySelector('img');
     if (image) image.addEventListener('error', () => { const text = document.createElement('span'); text.className = 'image-error'; text.textContent = 'Visuel introuvable — vérifiez le chemin local.'; image.replaceWith(text); }, { once: true });
@@ -319,21 +384,31 @@ class IspBoxCardEditor extends HTMLElement {
   set hass(hass) { this._hass = hass; const form = this.shadowRoot.querySelector('ha-form'); if (form) form.hass = hass; }
   render() {
     if (!this.config) return;
-    this.shadowRoot.innerHTML = `<ha-form></ha-form><p>ISP Box Card ${VERSION} · Diagnostics additionnels et ports Ethernet : configuration YAML (voir README).</p>`;
+    this.shadowRoot.innerHTML = `<ha-form></ha-form><button type="button" id="reset-appearance">Réinitialiser l’apparence</button><p>ISP Box Card ${VERSION} · Diagnostics additionnels et ports Ethernet : configuration YAML (voir README).</p>`;
     const form = this.shadowRoot.querySelector('ha-form');
     form.hass = this._hass;
-    form.data = {auto_detect:true,show_controls:true,show_missing:false,hide_public_ip:true,...this.config};
+    form.data = {auto_detect:true,show_controls:true,show_missing:false,hide_public_ip:true,layout:'full',...this.config,appearance:{...this.config.appearance,colors:Object.fromEntries(Object.entries(this.config.appearance?.colors||{}).map(([key,value])=>[key,hexToRgb(value)]))}};
     form.schema = [
       { name: 'provider', selector: { select: { options: Object.entries(PROVIDERS).map(([value, p]) => ({ value, label: p.name })) } } },
       ...(INTEGRATION_PROFILES[this.config.provider||'free'].automatic ? [{name:'device_id',selector:{device:{integration:INTEGRATION_PROFILES[this.config.provider||'free'].domain}}}] : []),
+      {name:'layout',selector:{select:{options:[{value:'full',label:'Complète'},{value:'compact',label:'Compacte'}]}}},
+      {name:'appearance',type:'expandable',title:'Apparence',schema:[
+        ...Object.entries(APPEARANCE_RANGES).map(([name,max])=>({name,selector:{number:{min:0,max,step:1,mode:'box',unit_of_measurement:'px'}}})),
+        {name:'colors',type:'expandable',title:'Couleurs personnalisées',schema:Object.keys(COLOR_ROLES).map(name=>({name,selector:{color_rgb:{}}}))},
+      ]},
       ...['title', 'model', 'technology', 'image'].map(name => ({ name, selector: { text: {} } })),
       ...[...(INTEGRATION_PROFILES[this.config.provider||'free'].automatic ? ['auto_detect'] : []), 'hide_public_ip', 'show_missing', 'show_controls'].map(name => ({name,selector:{boolean:{}}})),
       ...['download_max', 'upload_max'].map(name => ({ name, selector: { number: { min: 1, mode: 'box', unit_of_measurement: 'Mbit/s' } } })),
       { name: 'attributes', type: 'expandable', title: 'Attributs optionnels (IP et démarrage)', schema: ['public_ip', 'uptime', 'ethernet_devices', 'wifi_devices'].filter(name=>INTEGRATION_PROFILES[this.config.provider||'free'].fields.includes(name)||this.config.attributes?.[name]).map(name => ({ name, selector: { text: {} } })) },
       { name: 'entities', type: 'expandable', title: 'Entités Home Assistant', schema: [...new Set([...INTEGRATION_PROFILES[this.config.provider||'free'].fields,...Object.keys(this.config.entities||{})])].map(name => ({ name, selector: { entity: ['wifi', 'guest_wifi'].includes(name) ? { domain: 'switch' } : name === 'reboot' ? { domain: 'button' } : {} } })) },
     ];
-    const labels = { auto_detect:'Détecter les données de l’intégration', device_id:'Appareil box (requis si plusieurs)', provider: 'Opérateur', title: 'Titre personnalisé', model: 'Modèle de box', technology: 'Technologie (ex. Fibre XGS-PON)', image: 'Visuel local (ex. /local/freebox-ultra.webp)', show_missing: 'Afficher aussi les blocs non renseignés de la référence', show_controls: 'Afficher les commandes réseau', hide_public_ip: 'Masquer l’IP publique par défaut', download_max: 'Maximum descendant', upload_max: 'Maximum montant', entities: 'Entités', ...LABELS };
+    const labels = { layout:'Format', radius:'Arrondi des angles', gap:'Espacement entre blocs', padding:'Marge intérieure', ...COLOR_ROLES, auto_detect:'Détecter les données de l’intégration', device_id:'Appareil box (requis si plusieurs)', provider: 'Opérateur', title: 'Titre personnalisé', model: 'Modèle de box', technology: 'Technologie (ex. Fibre XGS-PON)', image: 'Visuel local (ex. /local/freebox-ultra.webp)', show_missing: 'Afficher aussi les blocs non renseignés de la référence', show_controls: 'Afficher les commandes réseau', hide_public_ip: 'Masquer l’IP publique par défaut', download_max: 'Maximum descendant', upload_max: 'Maximum montant', entities: 'Entités', ...LABELS };
     form.computeLabel = field => labels[field.name] || field.name;
+    this.shadowRoot.querySelector('#reset-appearance').addEventListener('click',()=>{
+      const next={...this.config};delete next.appearance;delete next.layout;this.config=next;this.render();
+      this.shadowRoot.querySelector('#reset-appearance').focus();
+      this.dispatchEvent(new CustomEvent('config-changed',{detail:{config:next},bubbles:true,composed:true}));
+    });
     form.addEventListener('value-changed', event => {
       event.stopPropagation();
       const next = { ...this.config, ...event.detail.value };
@@ -342,6 +417,13 @@ class IspBoxCardEditor extends HTMLElement {
       next.entities = Object.fromEntries(Object.entries(next.entities || {}).filter(([, value]) => value));
       if (next.attributes) next.attributes = Object.fromEntries(Object.entries(next.attributes).filter(([, value]) => value));
       for (const key of ['download_max', 'upload_max']) if (next[key] === '' || next[key] == null) delete next[key];
+      if(next.appearance){
+        const a={...next.appearance};
+        for(const key of Object.keys(APPEARANCE_RANGES))if(a[key]===''||a[key]==null)delete a[key];
+        a.colors=Object.fromEntries(Object.entries(a.colors||{}).filter(([,value])=>value!=null&&value!=='').map(([key,value])=>[key,Array.isArray(value)?rgbToHex(value):value]));
+        if(!Object.keys(a.colors).length)delete a.colors;
+        if(Object.keys(a).length)next.appearance=a;else delete next.appearance;
+      }
       this.config = next;
       if(changedProvider)this.render();
       this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: next }, bubbles: true, composed: true }));

@@ -6,6 +6,7 @@ import {createHash} from 'node:crypto';
 import {credentials,connect} from './inspect-home-assistant.mjs';
 const auth=await credentials(),api=await connect(auth);
 const moduleBytes=await readFile('dist/isp-box-card.js');
+const {version}=JSON.parse(await readFile('package.json','utf8'));
 const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox']});
 async function snapshot(){const dashboards=await api.call('lovelace/dashboards/list');const configs={};for(const d of dashboards)configs[d.url_path]=await api.call('lovelace/config',{url_path:d.url_path});return{dashboards,configs,resources:await api.call('lovelace/resources')};}
 try{
@@ -16,34 +17,46 @@ try{
   window.__blocked=[];const Native=WebSocket;window.WebSocket=class extends Native{send(data){let msg;try{msg=JSON.parse(data);}catch{}if(msg?.type==='call_service'){window.__blocked.push(`${msg.domain}.${msg.service}`);throw Error('Read-only test forbids service calls');}return super.send(data);}};
  },auth);
  const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message.replaceAll(auth.token,'[redacted]')));
- await page.route('**/local/isp-box-card.js*',route=>route.fulfill({contentType:'text/javascript',body:moduleBytes}));
+ await page.route(/\/(?:local|hacsfiles\/[^/]+)\/isp-box-card\.js(?:\?.*)?$/,route=>route.fulfill({contentType:'text/javascript',body:moduleBytes}));
  await page.goto(auth.url+'/dashboard-family-test/internet',{waitUntil:'domcontentloaded',timeout:45000});
  const card=page.locator('isp-box-card');await card.waitFor({timeout:60000});
- await page.waitForFunction(()=>customElements.get('isp-box-card')?.version==='0.2.0');
+ await page.waitForFunction(version=>customElements.get('isp-box-card')?.version===version,version);
  await page.waitForFunction(()=>{const find=root=>{for(const el of root.querySelectorAll('*')){if(el.localName==='isp-box-card')return el;if(el.shadowRoot){const match=find(el.shadowRoot);if(match)return match;}}};const c=find(document.querySelector('home-assistant').shadowRoot);return c?.settings()._detected_device&&c._registryUnsubscribers?.length===2&&c.shadowRoot.querySelector('.diagnostic-panel')&&c.shadowRoot.querySelector('img')?.naturalWidth>0;},{},{timeout:60000});
  const checks=await card.evaluate(c=>{
   const settings=c.settings(),deviceId=settings._detected_device;
   const diagnostics=settings.diagnostics.map(item=>({entity:item.entity,name:item.name,unit:c._hass.states[item.entity]?.attributes?.unit_of_measurement}));
   const expected=c._registry.filter(entry=>entry.platform==='freebox'&&entry.device_id===deviceId&&!entry.disabled_by&&['sensor'].includes(entry.entity_id.split('.')[0])).filter(entry=>{const attrs=c._hass.states[entry.entity_id]?.attributes;return attrs?.device_class==='temperature'||attrs?.unit_of_measurement==='rpm';}).map(entry=>entry.entity_id);
   window.liveCard=c;
-  return{version:customElements.get('isp-box-card').version,auto_detected:!!deviceId,registry_event_subscriptions:c._registryUnsubscribers.length,diagnostics,temperature_and_fan_entities:expected,ip_visible:c._revealed,connection_mapped:!!settings.entities.connection,guest_wifi_mapped:!!settings.entities.guest_wifi,firmware_visible:settings._device_info.some(i=>i.name==='Firmware')};
+  return{version:customElements.get('isp-box-card').version,auto_detected:!!deviceId,registry_event_subscriptions:c._registryUnsubscribers.length,diagnostics,temperature_and_fan_entities:expected,ip_visible:c._revealed,ip_expected:c.config.hide_public_ip===false,connection_mapped:!!settings.entities.connection,guest_wifi_mapped:!!settings.entities.guest_wifi,firmware_visible:settings._device_info.some(i=>i.name==='Firmware')};
  });
  assert(checks.auto_detected);assert(checks.temperature_and_fan_entities.length>0);
  for(const id of checks.temperature_and_fan_entities)assert(checks.diagnostics.some(item=>item.entity===id));
  assert(checks.diagnostics.some(item=>item.name==='Appels manqués non lus'));
- assert.equal(checks.connection_mapped,false);assert.equal(checks.guest_wifi_mapped,false);assert.equal(checks.firmware_visible,true);assert.equal(checks.ip_visible,true);
+ assert.equal(checks.connection_mapped,false);assert.equal(checks.guest_wifi_mapped,false);assert.equal(checks.firmware_visible,true);assert.equal(checks.ip_visible,checks.ip_expected);
  assert.equal(await card.getByRole('switch',{name:'Wi-Fi invité',exact:true}).count(),0);
  assert.equal(await card.locator('.ports').count(),0);
  for(const width of [1280,390]){await page.setViewportSize({width,height:1800});assert.deepEqual(await card.evaluate(c=>[...c.shadowRoot.querySelectorAll('.tile,.hero,.diagnostic')].filter(el=>el.scrollWidth>el.clientWidth+2).map(el=>el.className)),[]);await card.screenshot({path:`artifacts/provider-adaptation/freebox-${width}.png`});}
  // Real HA editor, inside its context-provider tree. No dashboard save.
  await page.evaluate(()=>{
-  const editor=customElements.get('isp-box-card').getConfigElement();editor.hass=document.querySelector('home-assistant').hass;editor.setConfig({...liveCard.config,device_id:liveCard.settings()._detected_device,show_missing:false});window.previewEditor=editor;
+  const editor=customElements.get('isp-box-card').getConfigElement();editor.hass=document.querySelector('home-assistant').hass;editor.setConfig({...liveCard.config,device_id:liveCard.settings()._detected_device,show_missing:false,layout:'compact',appearance:{radius:12,gap:10,colors:{accent:'#7c3aed',background:'#f8fafc',text:'#172033'}}});window.previewEditor=editor;
   const panel=document.createElement('div');panel.id='profile-editor';panel.style.cssText='position:fixed;inset:0;z-index:99999;overflow:auto;background:var(--card-background-color,#fff);padding:24px';panel.append(editor);document.querySelector('home-assistant').shadowRoot.append(panel);
  });
  await page.getByRole('textbox',{name:'Titre personnalisé',exact:true}).fill('Prévisualisation des profils');await page.getByRole('textbox',{name:'Modèle de box',exact:true}).click();
  await page.waitForFunction(()=>previewEditor.config.title==='Prévisualisation des profils');
  assert.equal(await page.locator('#profile-editor ha-entity-picker').count(),7);
  assert.equal(await page.locator('#profile-editor ha-device-picker').count(),1);
+ await page.getByText('Apparence',{exact:true}).click();
+ await page.getByText('Couleurs personnalisées',{exact:true}).click();
+ await page.locator('#profile-editor ha-selector-color_rgb').first().waitFor();
+ assert.equal(await page.locator('#profile-editor ha-selector-color_rgb').count(),11);
+ await page.getByRole('spinbutton',{name:'Arrondi des angles',exact:true}).fill('8');
+ await page.getByRole('textbox',{name:'Titre personnalisé',exact:true}).click();
+ await page.waitForFunction(()=>previewEditor.config.appearance.radius===8);
+ // Compact + a light custom palette on real states, in this temporary DOM only.
+ await page.evaluate(()=>liveCard.setConfig({...liveCard.config,layout:'compact',appearance:{radius:8,gap:10,padding:12,colors:{accent:'#7c3aed',background:'#f8fafc',surface:'#fff',text:'#172033',muted:'#475569',border:'#cbd5e1',download:'#0369a1',upload:'#15803d'}}}));
+ await page.evaluate(()=>document.querySelector('home-assistant').shadowRoot.querySelector('#profile-editor').remove());
+ assert.equal(await card.locator('.box-stage').count(),0);
+ for(const width of [1280,390]){await page.setViewportSize({width,height:1800});assert.deepEqual(await card.evaluate(c=>[...c.shadowRoot.querySelectorAll('.tile,.hero,.diagnostic')].filter(el=>el.scrollWidth>el.clientWidth+2).map(el=>el.className)),[]);await card.screenshot({path:`artifacts/provider-adaptation/appearance-compact-${width}.png`});}
  assert.deepEqual(errors,[]);assert.deepEqual(await page.evaluate(()=>window.__blocked),[]);
  const after=await snapshot();assert.deepEqual(after,before);
  const report={passed:true,version:checks.version,preview_only:true,installed_module_modified:false,real_home_assistant:true,real_freebox:true,other_providers:'synthetic fixtures only',module_sha256:createHash('sha256').update(moduleBytes).digest('hex'),checks,page_errors:errors,service_calls:0,all_dashboards_and_resources_unchanged:true};

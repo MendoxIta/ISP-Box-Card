@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.0
+
+- Formats complet et compact, sans perte de mesures ni de commandes.
+- Palette personnalisable par rôle, arrondis, espacements et marges intérieures.
+- Sélecteurs de couleurs dans l’éditeur visuel et bouton de réinitialisation limité à l’apparence.
+- Styles propres à chaque carte ; compatibilité des configurations existantes et validation stricte des valeurs.
+- Démonstration interactive d’apparence, tests de géométrie/couleurs et contrôle de l’éditeur natif HA.
+
 ## 0.2.0
 
 - Profils fondés sur l’audit Core 2026.10.4 et Livebox HACS Cyr-ius 2.6.0.
